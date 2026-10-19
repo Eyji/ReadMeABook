@@ -48,6 +48,11 @@ function formatHost(host: string): string {
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
 }
 
+/** `[fd00::5]` → `fd00::5` (IPv6 literals appear bracketed in URLs) */
+function stripBrackets(host: string): string {
+  return host.startsWith('[') && host.endsWith(']') ? host.slice(1, -1) : host;
+}
+
 /**
  * Hosts the startup secret may be sent to, in order: loopback (127.0.0.1, [::1]),
  * then the server's bound address only when HOSTNAME is an IP literal (a machine
@@ -56,7 +61,7 @@ function formatHost(host: string): string {
 export function startupInitTargets(env: Env): string[] {
   const port = env.PORT?.trim() || '3000';
   const rawBound = env.HOSTNAME?.trim() ?? '';
-  const bound = rawBound.replace(/^[|]$/g, '');
+  const bound = stripBrackets(rawBound);
   const boundIp = isIP(bound) !== 0 && !WILDCARD_HOSTS.has(bound) && !LOOPBACK_HOSTS.has(bound) ? bound : null;
   const targets: string[] = [`http://127.0.0.1:${port}`, `http://[::1]:${port}`];
 
@@ -66,7 +71,7 @@ export function startupInitTargets(env: Env): string[] {
   if (nextOrigin) {
     try {
       const url = new URL(nextOrigin);
-      const host = url.hostname.replace(/^[|]$/g, '');
+      const host = stripBrackets(url.hostname);
       const allowed = LOOPBACK_HOSTS.has(url.hostname) || LOOPBACK_HOSTS.has(host) || (boundIp !== null && host === boundIp);
       if (url.protocol === 'http:' && allowed) targets.push(url.origin);
     } catch {

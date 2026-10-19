@@ -24,6 +24,11 @@ describe('startupInitTargets', () => {
       .toEqual(['http://127.0.0.1:3030', 'http://[::1]:3030', 'http://192.168.1.20:3030']);
   });
 
+  it.each(['fd00::5', '[fd00::5]'])('accepts a bound IPv6 literal written as %s', (hostname) => {
+    expect(startupInitTargets({ PORT: '3030', HOSTNAME: hostname, __NEXT_PRIVATE_ORIGIN: 'http://[fd00::5]:3030' }))
+      .toEqual(['http://127.0.0.1:3030', 'http://[::1]:3030', 'http://[fd00::5]:3030']);
+  });
+
   it('ignores a HOSTNAME that is a machine name (it could resolve off-box)', () => {
     expect(startupInitTargets({ PORT: '3030', HOSTNAME: 'build-host.corp.example', __NEXT_PRIVATE_ORIGIN: 'http://build-host.corp.example:3030' }))
       .toEqual(['http://127.0.0.1:3030', 'http://[::1]:3030']);
