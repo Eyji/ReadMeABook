@@ -4,6 +4,7 @@
  */
 
 import { OrganizeFilesPayload, getJobQueueService } from '../services/job-queue.service';
+import path from 'path';
 import { prisma } from '../db';
 import { getFileOrganizer } from '../utils/file-organizer';
 import { RMABLogger } from '../utils/logger';
@@ -24,7 +25,7 @@ import { addAutoBlock } from '../services/blocklist.service';
  * Handles both audiobook and ebook request types with appropriate branching
  */
 export async function processOrganizeFiles(payload: OrganizeFilesPayload): Promise<any> {
-  const { requestId, audiobookId, downloadPath, jobId, cleanupSource, selectedFiles } = payload;
+  const { requestId, audiobookId, downloadPath, jobId, cleanupSource, selectedFiles, downloadHistoryId } = payload;
 
   const logger = RMABLogger.forJob(jobId, 'OrganizeFiles');
 
@@ -339,11 +340,19 @@ export async function processOrganizeFiles(payload: OrganizeFilesPayload): Promi
     }
 
     // Cleanup downloads if configured (uses IDownloadClient.postProcess for client-specific cleanup)
-    await cleanupDownloadAfterOrganize(requestId, downloadPath, configService, jobId, logger);
+    await cleanupDownloadAfterOrganize({
+      requestId,
+      downloadPath,
+      downloadHistoryId,
+      targetPath: result.targetPath,
+      configService,
+      jobId,
+      logger,
+    });
 
     // Cleanup source files if requested (manual import feature)
     if (cleanupSource) {
-      await cleanupSourceAfterOrganize(downloadPath, configService, jobId, logger, selectedFiles);
+      await cleanupSourceAfterOrganize(downloadPath, result.targetPath, configService, jobId, logger, selectedFiles);
     }
 
     return {
@@ -577,7 +586,7 @@ async function processEbookOrganization(
   request: { id: string; userId: string; type: string; user: { plexUsername: string | null } },
   logger: RMABLogger
 ): Promise<any> {
-  const { requestId, audiobookId, downloadPath, jobId, cleanupSource } = payload;
+  const { requestId, audiobookId, downloadPath, jobId, cleanupSource, downloadHistoryId } = payload;
 
   logger.info(`Processing ebook organization for request ${requestId}`);
 
@@ -884,11 +893,35 @@ async function processEbookOrganization(
   }
 
   // Cleanup downloads if configured (uses IDownloadClient.postProcess for client-specific cleanup)
-  await cleanupDownloadAfterOrganize(requestId, downloadPath, configService, jobId, logger);
+  await cleanupDownloadAfterOrganize({
+    requestId,
+    downloadPath,
+    downloadHistoryId,
+    targetPath: result.targetPath,
+    configService,
+    jobId,
+    logger,
+  });
 
-  // Cleanup source files if requested (manual import feature)
+  // Cleanup source files if requested (manual import feature). Only the ebook
+  // file that was imported is removed, never the folder around it: an import
+  // folder can also hold an audiobook or other library content.
   if (cleanupSource) {
-    await cleanupSourceAfterOrganize(downloadPath, configService, jobId, logger);
+    const importedFile = epubFilePath || result.sourceFile;
+    if (!importedFile) {
+      logger.warn('Imported ebook file unknown, skipping source cleanup');
+    } else if (path.resolve(importedFile) === path.resolve(downloadPath)) {
+      await cleanupSourceAfterOrganize(downloadPath, result.targetPath, configService, jobId, logger);
+    } else {
+      await cleanupSourceAfterOrganize(
+        downloadPath,
+        result.targetPath,
+        configService,
+        jobId,
+        logger,
+        [path.relative(downloadPath, importedFile)]
+      );
+    }
   }
 
   return {

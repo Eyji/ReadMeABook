@@ -226,6 +226,31 @@ When user deletes and re-requests the same audiobook:
 - If found → Keeps torrent, only removes soft-deleted database record
 - Prevents deleting source files for active requests during chapter merging
 
+## Post-Organize Cleanup Safety
+
+**Code:** `src/lib/processors/organize-cleanup.ts`, `src/lib/utils/delete-guard.ts`
+
+**Download cleanup** (indexer `removeAfterProcessing`, non-torrent) runs only when all hold:
+- Job payload carries `downloadHistoryId` (set by monitor-download, retry-failed-imports, direct-download, request retry route; never by manual or bulk import)
+- That row belongs to the request, `downloadStatus = completed`, stored `downloadPath` == job `downloadPath`
+- Protocol: indexer `protocol` (case-insensitive), else `CLIENT_PROTOCOL_MAP[downloadClient]`; unknown or `torrent` → skip
+- retry-failed-imports writes a client-reported (mapped) path back to the row before queueing; a failed write only skips cleanup
+
+**`assertSafeToDelete(path, ctx)`** guards every delete in both cleanups (download + manual-import `cleanupSource`). Refused deletes log a warning; the job still succeeds.
+
+| Rule | Refuses |
+|------|---------|
+| a | Equals, contains, or is inside the organize target |
+| b | Equals or contains any root: `media_dir`, `download_dir`, `download_dir/customPath` per client, mapped `localPath` per client, `/bookdrop` |
+| c | Inside `media_dir`, unless inside a download root that itself sits strictly inside `media_dir` (`allowMediaSources` bypasses c for `cleanupSource` only) |
+
+- Comparison: realpath of candidate, target and roots (symlinks, junctions), plus dev+inode identity of the entry and its ancestors (case-insensitive mounts). Inode 0 never matches.
+- `cleanupSource` + `selectedFiles`: each file is checked; files inside the target are kept and listed in a warning (in-place renamed re-imports keep the old-named file).
+- Ebook `cleanupSource` removes only the imported ebook file, never its folder.
+- `media_dir` resolution shared via `src/lib/utils/media-dir.ts` (`media_dir` → `MEDIA_DIR` → `/media/audiobooks`).
+
+**Same-file copies:** `copyFile` is a no-op when source and destination are the same file (`isSameFile`: realpath equal, or same dev + non-zero inode); the organizer skips audio and cover art already in place.
+
 ## Interface
 
 ```typescript
@@ -270,6 +295,7 @@ async function organize(
 **4. Single file downloads** - Now supports files directly in downloads folder (not just directories)
 **5. Hardcoded media path** - Now reads `media_dir` from database config instead of hardcoded `/media/audiobooks`
 **6. Invalid URL error for cached cover art** - Fixed by detecting local cached thumbnails (`/api/cache/thumbnails/*`) and copying from `/app/cache/thumbnails/` instead of attempting HTTP download
+**7. Manual import deleted library folders (#242)** - Download cleanup used the request's newest download row regardless of origin and `rm -rf`'d the import folder (even the media root); `cleanupSource` with source == target unlinked the library files; in-place re-import truncated `cover.jpg` to 0 bytes. Fixed by provenance gate + delete guard + same-file copy skip (see Post-Organize Cleanup Safety)
 
 ## Tech Stack
 

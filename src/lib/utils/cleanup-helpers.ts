@@ -235,7 +235,7 @@ async function isDirectoryEmpty(dirPath: string): Promise<boolean | null> {
  * @param boundaryPath - The boundary path (must be normalized)
  * @returns true if testPath is strictly below boundaryPath
  */
-function isPathBelowBoundary(testPath: string, boundaryPath: string): boolean {
+export function isPathBelowBoundary(testPath: string, boundaryPath: string): boolean {
   // Ensure both paths don't have trailing slashes for comparison
   const normalizedTest = testPath.replace(/\/+$/, '');
   const normalizedBoundary = boundaryPath.replace(/\/+$/, '');
@@ -256,7 +256,7 @@ function isPathBelowBoundary(testPath: string, boundaryPath: string): boolean {
  * @param filePath - Path to normalize
  * @returns Normalized path with forward slashes and no trailing slash
  */
-function normalizePath(filePath: string): string {
+export function normalizePath(filePath: string): string {
   // Convert backslashes to forward slashes
   let normalized = filePath.replace(/\\/g, '/');
 
