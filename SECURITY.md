@@ -19,17 +19,17 @@ Report them privately through GitHub instead:
 2. Click **Report a vulnerability**.
 3. Fill in the form and submit it.
 
-Only you and the maintainers can see the report, so we can work through it there until a fix is out.
+Only you and I can see the report, and I will work through it with you there until a fix is out.
 
 ## What to Include
 
 The more of this you can give me, the faster I can confirm and fix it:
 
 - **Version:** the ReadMeABook version you are running (shown in the app, or the image tag).
-- **Deployment type:** unified Docker image, multi-container Docker, or bare-metal.
+- **Deployment type:** unified Docker image, multi-container Docker, or something else (describe it).
 - **Steps to reproduce:** what you did, in order, starting from a clean state if you can.
 - **Impact:** what an attacker could do with it, and what access they need first (none, a regular user account, an admin account, network access to the container).
-- Any proof of concept, logs, or screenshots. Please strip tokens, API keys, and passwords before sharing.
+- Any proof of concept, logs, or screenshots. Please strip API keys, passwords and other credentials before sharing.
 
 ## What to Expect
 
