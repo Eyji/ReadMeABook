@@ -31,7 +31,7 @@ function findSentinels(): string[] {
   // Search the rmab container's whole filesystem for any sentinel the shell would have dropped.
   const out = stackExec('rmab', [
     'sh', '-c',
-    `find / -xdev -name 'rmab_pwned_*' 2>/dev/null; true`,
+    `find / -maxdepth 12 -name 'rmab_pwned_*' 2>/dev/null; true`,
   ]);
   return out.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 }
@@ -131,7 +131,7 @@ test('media tools run without a shell: metacharacter file paths do not execute d
   });
 
   await test.step('the hostile download folder was really created on disk', async () => {
-    const listing = stackExec('rmab', ['sh', '-c', 'ls -la /downloads 2>/dev/null; true']);
+    const listing = stackExec('rmab', ['sh', '-c', 'ls -laR /downloads 2>/dev/null; true']);
     writeEvidence('sec-shell-exec/downloads-listing.txt', listing);
     // The literal payload folder name must be present verbatim (proves the path reached the merge).
     expect(listing, 'payload folder not found under /downloads').toContain('$(touch');

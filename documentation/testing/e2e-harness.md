@@ -26,7 +26,7 @@
 
 ## Trust split
 - Harness code (`run.mjs`, `compose.yml`, specs, `Dockerfile.test` + `.dockerignore`) always comes from the trusted checkout; `--worktree` is only a Docker build context. Nothing in it runs on the host.
-- `e2e:unit`: `npm ci --ignore-scripts`, then only `npm rebuild @prisma/engines prisma bcrypt esbuild unrs-resolver`; `prisma generate` with `--network=none`; tests run `--network none --user node --cap-drop ALL`, no mounts.
+- `e2e:unit` image: `node:20-bookworm` + the app's pinned static ffmpeg/ffprobe (ffmpeg tests run, not skip); `npm ci --ignore-scripts`, then only `npm rebuild @prisma/engines prisma bcrypt esbuild unrs-resolver`; `prisma generate` with `--network=none`; tests run `--network none --user node --cap-drop ALL`, no mounts.
 
 ## Stack (`e2e/compose.yml`, project `rmab-e2e-<slug>`)
 | Service | Image | Host port |
@@ -83,6 +83,7 @@
 - Kept between runs: only the preview stack and its image.
 
 ## Critical Issues
+- `tests/processors/organize-files.processor.test.ts` "organizes files and triggers filesystem scan when enabled" reaches api.audnex.us / api.audible.com for real; under `e2e:unit` (`--network none`) it times out (20 s). Host `npm test` hides it. Fix belongs in the test (mock the metadata calls), not the harness.
 - `setup/complete` with `authMethod: manual` 500s without a `registration` object (after writing part of the config); bootstrap always sends `registration: { require_admin_approval: true }`.
 - A daemon with broken ghcr.io credentials fails even public pulls (`denied: denied`). `--upgrade-from` then falls back to `e2e/lib/fetch-image.mjs`: anonymous registry API, every blob sha256-verified, OCI layout → `docker load`.
 - Evidence screenshots: explicit 1280x720 JPEGs (`snap()` in `lib/harness.ts`); Playwright's own screenshots are off, traces on.
