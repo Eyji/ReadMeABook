@@ -1,0 +1,92 @@
+# Component: E2E disposable stack (RMAB under test + real Audiobookshelf + fake-arr)
+# Documentation: documentation/testing/e2e-harness.md
+#
+# Always driven by e2e/run.mjs from a trusted checkout:
+#   docker compose -p rmab-e2e-<slug> -f e2e/compose.yml --env-file e2e/.env.test ...
+# Rules: named volumes only (no host bind mounts), every published port bound to 127.0.0.1,
+# RMAB on the assigned RMAB_PORT, everything else on ephemeral ports read back with `docker compose port`.
+
+name: rmab-e2e-${E2E_SLUG:?E2E_SLUG is required}
+
+services:
+  rmab:
+    image: ${RMAB_IMAGE:?RMAB_IMAGE is required}
+    depends_on:
+      fake-arr:
+        condition: service_healthy
+      abs:
+        condition: service_started
+    ports:
+      - "127.0.0.1:${RMAB_PORT:?RMAB_PORT is required}:3030"
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      LOG_LEVEL: ${RMAB_LOG_LEVEL:-info}
+      # Empty values let the image generate and persist its own secrets (upgrade runs use this).
+      JWT_SECRET: ${RMAB_JWT_SECRET:-}
+      JWT_REFRESH_SECRET: ${RMAB_JWT_REFRESH_SECRET:-}
+      CONFIG_ENCRYPTION_KEY: ${RMAB_CONFIG_ENCRYPTION_KEY:-}
+      POSTGRES_PASSWORD: ${RMAB_POSTGRES_PASSWORD:-}
+      PUBLIC_URL: http://127.0.0.1:${RMAB_PORT}
+    volumes:
+      - rmab-config:/app/config
+      - rmab-cache:/app/cache
+      - pgdata:/var/lib/postgresql/data
+      - redis:/var/lib/redis
+      - downloads:/downloads
+      - media:/media
+    labels:
+      rmab-e2e: "true"
+
+  abs:
+    image: ${ABS_IMAGE:-ghcr.io/advplyr/audiobookshelf:2.37.1@sha256:581d68b2a6fc7ebf58d81c878a9f387cbbc0d88ac9d37b298b9cee10168af85b}
+    ports:
+      - "127.0.0.1::80"
+    volumes:
+      - abs-config:/config
+      - abs-metadata:/metadata
+      - media:/media
+    labels:
+      rmab-e2e: "true"
+
+  fake-arr:
+    image: rmab-e2e/fake-arr:${FAKE_ARR_TAG:-local}
+    build:
+      context: .
+      dockerfile: fake-arr/Dockerfile
+      args:
+        FIXTURE_METADATA: ${FIXTURE_METADATA:-}
+      labels:
+        rmab-e2e: "true"
+    networks:
+      default:
+        aliases:
+          - tracker.e2e
+    ports:
+      - "127.0.0.1::9999"
+    environment:
+      PUID: ${PUID}
+      PGID: ${PGID}
+      SCENARIO: ${E2E_SCENARIO:-smoke}
+      PROWLARR_API_KEY: ${PROWLARR_API_KEY}
+      QBIT_USER: ${QBIT_USER}
+      QBIT_PASS: ${QBIT_PASS}
+      SAB_API_KEY: ${SAB_API_KEY}
+      PLEX_TOKEN: ${PLEX_TOKEN}
+      PUBLIC_HOST: fake-arr
+      TRACKER_HOST: tracker.e2e
+    volumes:
+      - downloads:/downloads
+      - media:/media
+    labels:
+      rmab-e2e: "true"
+
+volumes:
+  rmab-config:
+  rmab-cache:
+  pgdata:
+  redis:
+  downloads:
+  media:
+  abs-config:
+  abs-metadata:

@@ -7,7 +7,9 @@
  * all headers so specs can assert where credentials travelled.
  */
 
+import fs from 'node:fs';
 import http from 'node:http';
+import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { loadConfig, State } from './state.js';
 import { handleProwlarr, handleTrackerHop } from './prowlarr.js';
@@ -80,8 +82,23 @@ export async function startFakeArr(config = loadConfig()) {
   return { state, servers, close };
 }
 
+/**
+ * Named volumes are created root-owned. RMAB (PUID) must write to /downloads and /media, and nothing
+ * in its image chowns them, so fake-arr (root, mounts both) prepares them before RMAB starts.
+ */
+export function prepareVolumes(config) {
+  if (typeof process.getuid !== 'function' || process.getuid() !== 0) return;
+  const dirs = [config.downloadsDir, config.mediaDir, path.posix.join(config.mediaDir, 'audiobooks')];
+  for (const dir of dirs) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.chownSync(dir, config.puid, config.pgid);
+    fs.chmodSync(dir, 0o775);
+  }
+}
+
 if (import.meta.url === pathToFileURL(process.argv[1] || '').href) {
   const config = loadConfig();
+  prepareVolumes(config);
   const { state } = await startFakeArr(config);
   console.log(`[fake-arr] scenario=${state.scenario.name} ports=${JSON.stringify(config.ports)}`);
   const shutdown = () => process.exit(0);

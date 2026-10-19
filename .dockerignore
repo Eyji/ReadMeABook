@@ -64,3 +64,6 @@ downloads
 media
 pgdata
 redisdata
+
+# E2E harness (never part of the app image)
+e2e/

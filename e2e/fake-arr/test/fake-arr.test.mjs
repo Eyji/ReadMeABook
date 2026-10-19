@@ -104,8 +104,9 @@ test('prowlarr: key required; results are Prowlarr-shaped with apikey/link/file 
   assert.equal((await fetch(`${base('prowlarr')}/api/v1/search?query=x`)).status, 401);
   const viaQuery = await fetch(`${base('prowlarr')}/api/v1/indexer?apikey=${KEY}`);
   assert.equal(viaQuery.status, 200);
-  const results = await search('Fixture Book One Test Author');
+  const results = await search('Fixture Book One');
   assert.equal(results.length, 2);
+  assert.equal((await search('Fixture Book One Test Author')).length, 1);
   const good = results.find((r) => r.title.includes('Unabridged'));
   assert.equal(good.title, 'Test Author - Fixture Book One (Unabridged) [MP3 64kbps]');
   assert.equal(good.size, 420 * 1024 * 1024);

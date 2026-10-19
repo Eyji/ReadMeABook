@@ -1,0 +1,25 @@
+# Component: E2E harness containerized unit suite (npm test for any branch, incl. untrusted ones)
+# Documentation: documentation/testing/e2e-harness.md
+#
+# Built by `npm run e2e:unit -- --slug <s> --worktree <dir>` from a TRUSTED checkout:
+#   docker build -f <trusted>/e2e/Dockerfile.test <worktree>   (worktree = build context only)
+# Run with --network none, as the non-root node user, no bind mounts.
+# Node 20 + full bookworm (python3/make/g++ for native modules), matching the app image.
+
+FROM node:20-bookworm@sha256:8f693eaa7e0a8e71560c9a82b55fd54c2ae920a2ba5d2cde28bac7d1c01c9ba5
+ENV CI=true NEXT_TELEMETRY_DISABLED=1 NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
+WORKDIR /src
+RUN chown node:node /src
+USER node
+
+# 1. Dependencies exactly as locked, with NO lifecycle scripts from the branch or its packages...
+COPY --chown=node:node package.json package-lock.json ./
+RUN npm ci --ignore-scripts
+# ...then only the install scripts the unit suite needs (engines + native bindings).
+RUN npm rebuild @prisma/engines prisma bcrypt esbuild unrs-resolver
+
+# 2. Branch source; the Prisma client is generated with networking disabled.
+COPY --chown=node:node . .
+RUN --network=none npx prisma generate
+
+CMD ["npm", "test"]

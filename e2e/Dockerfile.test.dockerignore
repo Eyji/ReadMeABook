@@ -1,0 +1,22 @@
+# Component: build-context filter for e2e/Dockerfile.test (BuildKit reads <Dockerfile>.dockerignore)
+# Documentation: documentation/testing/e2e-harness.md
+**/node_modules
+.git
+.next
+out
+coverage
+src/generated
+config
+cache
+downloads
+media
+pgdata
+redis
+redisdata
+.claude
+e2e/.auth
+e2e/test-results
+e2e/playwright-report
+**/.env
+**/.env.local
+**/*.pem

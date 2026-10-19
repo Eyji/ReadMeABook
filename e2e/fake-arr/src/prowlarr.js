@@ -71,7 +71,7 @@ function matchesQuery(release, query) {
     .filter((w) => w.length >= 3);
   if (words.length === 0) return true;
   const title = release.title.toLowerCase();
-  return words.some((w) => title.includes(w));
+  return words.every((w) => title.includes(w));
 }
 
 /** Next status from a per-call sequence; the last entry repeats. */

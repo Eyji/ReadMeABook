@@ -13,7 +13,7 @@ Backend unit tests (Node) and frontend component tests (jsdom) with isolated moc
 - **Backend helpers:** `tests/helpers/prisma.ts`, `tests/helpers/job-queue.ts`
 - **GitHub Actions:** Manual workflow `.github/workflows/manual-tests.yml` runs `npm test`
 - **Coverage:** `npm run test:coverage` (reports in `coverage/`)
-- **Scope:** Unit tests only; no real network or services
+- **Scope:** Unit tests only; no real network or services. End-to-end: [testing/e2e-harness.md](testing/e2e-harness.md)
 
 ## API/Interfaces
 ```
@@ -26,6 +26,7 @@ npm run test:coverage
 - Frontend coverage not yet enforced; expand component/page tests before adding coverage gates.
 
 ## Related
+- [testing/e2e-harness.md](testing/e2e-harness.md)
 - [frontend/components.md](frontend/components.md)
 - [frontend/routing-auth.md](frontend/routing-auth.md)
 - [backend/services/jobs.md](backend/services/jobs.md)
