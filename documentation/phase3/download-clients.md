@@ -142,6 +142,25 @@ finalPath = config.customPath ? path.join(downloadDir, config.customPath) : down
 3. Route to correct service (qBittorrent, Transmission, or SABnzbd)
 4. Create download history record
 
+### Source Fetch & Prowlarr Key Scoping
+**File:** `src/lib/integrations/download-source.ts` (`fetchDownloadSource`), rules in `src/lib/utils/prowlarr-url.ts`, constants in `src/lib/constants/download-source.ts`
+- RMAB fetches every .torrent/.nzb itself (all 5 clients), then hands the file or magnet to the client
+- Redirects followed one hop at a time, max `MAX_SOURCE_REDIRECT_HOPS` (5); `Location` resolved against the current hop (relative OK)
+- `magnet:` accepted at any hop or as the response body (torrent clients only; usenet → error)
+- One deadline across all hops (caller timeout); file size cap `MAX_SOURCE_FILE_BYTES` (50 MB); non-http(s) hops rejected
+- **Prowlarr key:** `AddDownloadOptions.sourceAuth = { prowlarrBaseUrl, apiKey }` (built in `download-torrent.processor.ts` from `getProwlarrConnection()`). Key sent (`X-Api-Key` + `apikey` query restored if missing) **only** when the hop is `<configured Prowlarr origin><base path>/{indexerId}/download`. Any other origin or Prowlarr path gets no key. Configured URL that is not plain http(s) → key never sent
+- Logs/errors: `redactUrl()` masks `apikey|api_key|passkey|token|auth|key` values and URL credentials; `DownloadSourceError.sourceUrl` is redacted
+- HTTP error from source → `DownloadSourceError` (processor tries next ranked release)
+
+### User-Picked Releases
+**File:** `src/lib/services/download-selection-guard.ts`
+- Torrent/NZB picks (`request-with-torrent`, `select-torrent`, `select-ebook` indexer source, admin `replace`, admin `approve` incl. stored picks): `downloadUrl` must be a `magnet:?` URI or a Prowlarr download URL (rule above) → else 400 `ValidationError`
+- Magnets are accepted as-is, so a user can choose a magnet's tracker list (accepted)
+- Anna's Archive picks: only `md5` (32 hex) is trusted; links rebuilt with `getSlowDownloadLinks(md5, ebook_sidecar_base_url, flaresolverr)`; client `downloadUrl(s)` ignored
+- Search responses (`search-torrents`, `requests/[id]/interactive-search`, both `interactive-search-ebook`): `stripProwlarrKeyFromResults()` removes any `apikey=<configured key>` on any origin from every string field (fetcher restores it for Prowlarr hops)
+- Interactive search permission (`denyWithoutInteractiveSearchAccess`, `src/lib/middleware/interactive-search-access.ts`) enforced on all search + pick routes above (user routes) → 403
+- Known limit: if a reverse proxy makes Prowlarr publish links on an origin other than the configured `prowlarr_url`, interactive picks get 400 (automatic grabs still work); set `prowlarr_url` to the origin Prowlarr links use
+
 ### Migration
 **Auto-migration** from legacy single-client config to new JSON array format on first access:
 - Reads legacy keys: `download_client_type`, `download_client_url`, etc.
@@ -240,7 +259,9 @@ Accepts both legacy single client and new array format:
 | `src/lib/integrations/transmission.service.ts` | Transmission RPC implementation |
 | `src/lib/services/download-client-manager.service.ts` | Core multi-client service, protocol-based routing |
 | `src/lib/integrations/prowlarr.service.ts:379` | Protocol filtering logic (both clients = all results) |
-| `src/lib/processors/download-torrent.processor.ts:44` | Download routing (detect protocol → route) |
+| `src/lib/processors/download-torrent.processor.ts:44` | Download routing (detect protocol → route), builds `sourceAuth` |
+| `src/lib/integrations/download-source.ts` | Shared .torrent/.nzb fetch, redirect hops, key scoping |
+| `src/lib/services/download-selection-guard.ts` | Pick validation, Anna's Archive link rebuild, key stripping |
 | `src/app/api/admin/settings/download-clients/*` | CRUD API routes, protocol-level duplicate check |
 | `src/components/admin/download-clients/*` | UI components (3-column card layout, protocol enforcement) |
 | `src/app/admin/settings/tabs/DownloadTab/DownloadTab.tsx` | Replaced with management component |

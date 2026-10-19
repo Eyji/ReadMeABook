@@ -202,6 +202,7 @@ type TorrentState =
 **6. Race condition on torrent availability** - Fixed with 3s initial delay + exponential backoff retry (500ms, 1s, 2s)
 **7. Error logging during duplicate check** - Removed console.error in getTorrent() during expected "not found" cases (duplicate checking)
 **8. Prowlarr magnet link redirects** - Some indexers return HTTP URLs that redirect to magnet: links. Fixed by intercepting 3xx redirects before axios follows them, extracting the Location header, and routing to magnet flow if target is a magnet: link
+**9. Magnet at a later redirect hop (#298)** - Only the first `Location` was checked; later hops went through axios, which cannot follow `magnet:`. Fixed by the shared fetcher (`download-source.ts`): every hop checked, relative redirects resolved, Prowlarr key sent only to Prowlarr download hops (see [download-clients.md](./download-clients.md#source-fetch--prowlarr-key-scoping))
 **9. Category save path not updating** - When user changes `download_dir` setting, category keeps old path. Fixed by:
    - Checking existing categories before create/edit (avoid unnecessary 409 errors)
    - Invalidating service singleton when settings change (forces config reload)

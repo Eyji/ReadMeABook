@@ -1,6 +1,6 @@
 /**
  * Component: Request Detail Query Shapes (GET /api/requests/[id])
- * Documentation: documentation/backend/api.md
+ * Documentation: documentation/backend/services/api-tokens.md
  *
  * Non-admin callers (owners, API tokens) get an explicit field list that leaves out
  * internal job/download data: Job.payload/result/stackTrace,
