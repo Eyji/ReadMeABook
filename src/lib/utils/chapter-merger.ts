@@ -410,7 +410,7 @@ function generateChapterMetadata(chapters: ChapterFile[]): string {
       .replace(/=/g, '\\=')
       .replace(/;/g, '\\;')
       .replace(/#/g, '\\#')
-      .replace(/\n/g, '');
+      .replace(/[\r\n\0]/g, ''); // ffmetadata ends a line at \r or \n
 
     metadata += '\n[CHAPTER]\n';
     metadata += 'TIMEBASE=1/1000\n';
@@ -615,12 +615,12 @@ export async function mergeChapters(
     // Ensure temp directory exists
     await fs.mkdir(tempDir, { recursive: true, ...(options.dirMode !== undefined && { mode: options.dirMode }) });
 
-    // Create concat file. The list is line-based with no escape for line breaks,
-    // so a name containing a control character could smuggle in extra directives:
+    // Create concat file. The list is line-based with no escape for a line break
+    // (or NUL), so a path containing one could smuggle in extra directives:
     // refuse it (the caller then organizes the files individually).
-    const unsafeChapter = chapters.find(c => /[\x00-\x1f\x7f]/.test(c.path));
+    const unsafeChapter = chapters.find(c => /[\r\n\0]/.test(c.path));
     if (unsafeChapter) {
-      throw new Error(`Cannot merge: file name contains a control character (${JSON.stringify(path.basename(unsafeChapter.path))})`);
+      throw new Error(`Cannot merge: file path contains a line break or NUL character (${JSON.stringify(unsafeChapter.path)})`);
     }
     const concatContent = chapters
       .map(c => `file '${c.path.replace(/'/g, "'\\''")}'`)
@@ -642,7 +642,7 @@ export async function mergeChapters(
       '-y',
       '-f', 'concat',
       '-safe', '0',
-      '-protocol_whitelist', 'file,pipe', // Concat entries may only open local files
+      '-protocol_whitelist', 'file', // Concat entries may only open local files
       '-i', concatFile,
       '-i', metadataFile,
       '-map_metadata', '1',
@@ -901,7 +901,8 @@ export function formatDuration(ms: number): string {
  */
 export async function checkDiskSpace(directory: string): Promise<number | null> {
   try {
-    // Blocks available to unprivileged users (same figure as `df -k` "Available")
+    // Blocks available to unprivileged users x block size. Close to `df` "Available";
+    // may differ where fragment size != block size (e.g. some FUSE/virtiofs mounts)
     const stats = await fs.statfs(directory);
     const available = stats.bavail * stats.bsize;
     if (Number.isFinite(available)) {

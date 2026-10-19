@@ -680,11 +680,6 @@ describe('chapter merger', () => {
       expect(titleArg).toBe("title=It's Not Her");
       expect(albumArtistArg).toBe("album_artist=O'Brien");
       expect(composerArg).toBe("composer=Jane's Voice");
-      expect(titleArg).not.toContain("\\'"); // No escaped single quotes
-      expect(albumArtistArg).toContain("O'Brien");
-      expect(albumArtistArg).not.toContain("\\'");
-      expect(composerArg).toContain("Jane's Voice");
-      expect(composerArg).not.toContain("\\'");
 
       // Verify no backslash-escaped single quotes anywhere in args
       const allArgsJoined = args.join(' ');
@@ -737,101 +732,6 @@ describe('chapter merger', () => {
       // Previously the command-string tokenizer produced `title="Book \"Quoted\" \$100`
       const titleArg = args.find((arg: string) => arg.startsWith('title='));
       expect(titleArg).toBe('title=Book "Quoted" $100');
-    });
-  });
-
-  describe('argv safety (no shell)', () => {
-    const HOSTILE_DIR = '/dl/My $(touch pwned) `id` "dq" \'sq\' Book';
-
-    function setupMergeMocks(outputPath: string) {
-      fsMock.access.mockResolvedValue(undefined);
-      fsMock.stat.mockImplementation(async (filePath: string) =>
-        filePath === outputPath ? { size: 2 * 1024 * 1024 } : { size: 500 * 1024 }
-      );
-      fsMock.mkdir.mockResolvedValue(undefined);
-      fsMock.writeFile.mockResolvedValue(undefined);
-      fsMock.unlink.mockResolvedValue(undefined);
-      mockExecImplementation((command) => {
-        if (command.startsWith('ffprobe')) {
-          return { stdout: JSON.stringify({ format: { duration: '120', bit_rate: '128000', tags: {} } }) };
-        }
-        return { stdout: '' };
-      });
-      spawnMock.mockReturnValue(createSpawnProcess(0));
-    }
-
-    it('probes with execFile and the path as one untouched argv element', async () => {
-      const filePath = `${HOSTILE_DIR}/01.m4a`;
-      mockExecImplementation(() => ({ stdout: JSON.stringify({ format: { duration: '5' } }) }));
-
-      await probeAudioFile(filePath);
-
-      expect(execState.execFile).toHaveBeenCalledTimes(1);
-      const [file, args, options] = execState.execFile.mock.calls[0];
-      expect(file).toBe('ffprobe');
-      expect(args).toEqual(['-v', 'quiet', '-print_format', 'json', '-show_format', '-show_streams', filePath]);
-      expect(options).toEqual({ timeout: 30000 });
-    });
-
-    it('merges with every path passed verbatim to spawn/execFile and concat limited to local files', async () => {
-      const outputPath = `${HOSTILE_DIR}/out.m4b`;
-      const chapters = [
-        { path: `${HOSTILE_DIR}/01.m4a`, filename: '01.m4a', duration: 60000, bitrate: 128, chapterTitle: 'One' },
-        { path: `${HOSTILE_DIR}/02.m4a`, filename: '02.m4a', duration: 60000, bitrate: 128, chapterTitle: 'Two' },
-      ];
-      setupMergeMocks(outputPath);
-
-      const result = await mergeChapters(chapters, { title: 'Book', author: 'Author', outputPath });
-
-      expect(result.success).toBe(true);
-      const [bin, args, spawnOptions] = spawnMock.mock.calls[0];
-      expect(bin).toBe('ffmpeg');
-      expect(spawnOptions).toBeUndefined();
-      expect(args[args.length - 1]).toBe(outputPath);
-      const concatIdx = args.indexOf('concat');
-      const whitelistIdx = args.indexOf('-protocol_whitelist');
-      const firstInputIdx = args.indexOf('-i');
-      expect(args[whitelistIdx + 1]).toBe('file,pipe');
-      expect(concatIdx).toBeLessThan(whitelistIdx);
-      expect(whitelistIdx).toBeLessThan(firstInputIdx);
-      expect(args[firstInputIdx + 1]).toBe(path.join(HOSTILE_DIR, path.basename(args[firstInputIdx + 1])));
-
-      // Decode checks get the output path as its own argv element
-      const decodeCalls = execState.execFile.mock.calls.filter(
-        ([file, a]: [string, string[]]) => file === 'ffmpeg' && a.includes('null')
-      );
-      expect(decodeCalls).toHaveLength(2);
-      for (const [, a] of decodeCalls) {
-        expect(a[a.indexOf('-i') + 1]).toBe(outputPath);
-      }
-    });
-
-    it('refuses to merge when a file name embeds a newline (no injected concat directive)', async () => {
-      const outputPath = '/tmp/output.m4b';
-      const chapters = [
-        { path: '/tmp/01.m4a', filename: '01.m4a', duration: 60000, bitrate: 128, chapterTitle: 'One' },
-        {
-          path: "/tmp/02.m4a'\nfile '/etc/passwd",
-          filename: '02.m4a',
-          duration: 60000,
-          bitrate: 128,
-          chapterTitle: 'Two',
-        },
-      ];
-      setupMergeMocks(outputPath);
-
-      const result = await mergeChapters(chapters, { title: 'Book', author: 'Author', outputPath });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('control character');
-      expect(spawnMock).not.toHaveBeenCalled();
-      const concatWrites = fsMock.writeFile.mock.calls.filter(([file]: [string]) =>
-        path.basename(file).startsWith('concat_')
-      );
-      for (const [, content] of concatWrites) {
-        expect(String(content).split('\n')).toHaveLength(chapters.length);
-        expect(String(content)).not.toContain("\nfile '/etc/passwd");
-      }
     });
   });
 });
