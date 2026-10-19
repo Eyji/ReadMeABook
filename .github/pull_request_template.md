@@ -17,5 +17,5 @@
 ## Checklist
 
 - [ ] Tests added or updated, and `npm test` passes
-- [ ] Docs in `documentation/` updated using the token-efficient format (and `documentation/TABLEOFCONTENTS.md` if a doc was added)
-- [ ] No secrets, tokens, API keys or personal data in the code, logs or screenshots
+- [ ] Docs in `documentation/` updated in the compact format (bullets, tables, short code blocks), plus `documentation/TABLEOFCONTENTS.md` if a doc was added
+- [ ] No secrets, API keys, passwords or personal data in the code, logs or screenshots
