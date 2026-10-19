@@ -6,7 +6,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { evidencePath, writeEvidence, waitFor, fakeArr, Rmab } from '../lib/harness';
+import { snap, evidencePath, writeEvidence, waitFor, fakeArr, Rmab } from '../lib/harness';
 
 test.skip(process.env.E2E_PHASE !== 'preview', 'preview seeding only runs via run.mjs preview');
 test.use({ storageState: evidencePath('storage-state.json') });
@@ -27,7 +27,7 @@ test('preview: seed available, downloading and failed requests', async ({ page }
   writeEvidence('preview/requests.json', requests.requests.map((r) => ({ title: r.audiobook?.title, status: r.status, progress: r.progress })));
   expect(new Set(requests.requests.map((r) => r.status))).toEqual(new Set(['available', 'downloading', 'failed']));
   await page.goto('/requests');
-  await page.screenshot({ path: evidencePath('preview', 'requests.png'), fullPage: true });
+  await snap(page, 'preview', 'requests');
   await page.goto('/');
-  await page.screenshot({ path: evidencePath('preview', 'home.png'), fullPage: true });
+  await snap(page, 'preview', 'home');
 });

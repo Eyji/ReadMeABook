@@ -9,7 +9,7 @@
 
 import fs from 'node:fs';
 import { test, expect } from '@playwright/test';
-import { env, evidencePath, writeEvidence, waitFor, fakeArr, tableRowCounts, urls, Rmab } from '../lib/harness';
+import { snap, env, evidencePath, writeEvidence, waitFor, fakeArr, tableRowCounts, urls, Rmab } from '../lib/harness';
 
 const phase = process.env.E2E_PHASE;
 const SNAPSHOT = () => evidencePath('upgrade', 'before.json');
@@ -83,5 +83,5 @@ test('upgrade-verify: branch image keeps data, logins and decryptable secrets', 
   await page.getByRole('button', { name: 'Login', exact: true }).click();
   await page.waitForURL((u) => !u.pathname.startsWith('/login'), { timeout: 30_000 });
   await page.goto('/requests');
-  await page.screenshot({ path: evidencePath('upgrade', 'requests-after-upgrade.png'), fullPage: true });
+  await snap(page, 'upgrade', 'requests-after-upgrade');
 });

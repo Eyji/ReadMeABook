@@ -20,6 +20,7 @@ import {
   E2E_DIR, PREVIEW_PROJECT, LABEL, run, compose, composePort, readEnvFile, imageExists, imageSize,
   buildRmabImage, gitShortSha, enforceDiskCeiling, cleanupRun, dockerDf, setCommandLog,
 } from './lib/docker.mjs';
+import { fetchAndLoad } from './lib/fetch-image.mjs';
 
 const REPO = path.dirname(E2E_DIR);
 const PLAYWRIGHT_CLI = path.join(REPO, 'node_modules', '@playwright', 'test', 'cli.js');
@@ -182,7 +183,10 @@ async function stackOrPreview(opts) {
     if (opts['upgrade-from']) {
       const oldRef = `${RELEASE_REPO}:${opts['upgrade-from'].replace(/^v/, '')}`;
       const hadOld = imageExists(oldRef);
-      if (!hadOld) run('docker', ['pull', oldRef]);
+      if (!hadOld && run('docker', ['pull', oldRef], { allowFail: true }) !== 0) {
+        warn(`docker pull ${oldRef} failed; fetching it over the registry API (digest-verified)`);
+        await fetchAndLoad(oldRef);
+      }
       if (!hadOld) ctx.created.push(oldRef);
       ctx.sizeRefs.push(oldRef);
       ctx.summary.upgradeFrom = oldRef;

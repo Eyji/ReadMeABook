@@ -34,6 +34,11 @@ export function writeEvidence(name: string, value: unknown) {
   fs.writeFileSync(evidencePath(name), typeof value === 'string' ? value : `${JSON.stringify(value, null, 2)}\n`);
 }
 
+/** Evidence screenshot: viewport-sized JPEG (1280x720, <=1600 px per side). */
+export async function snap(page: { screenshot: (o: any) => Promise<unknown> }, dir: string, name: string) {
+  await page.screenshot({ path: evidencePath(dir, `${name}.jpg`), type: 'jpeg', quality: 70, fullPage: false });
+}
+
 export async function waitFor<T>(what: string, fn: () => Promise<T | null | undefined | false>, { timeoutMs = 60_000, intervalMs = 1_000 } = {}): Promise<T> {
   const end = Date.now() + timeoutMs;
   let lastError: unknown;

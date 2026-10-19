@@ -77,6 +77,8 @@ function setupPayload(abs: { libraryId: string; apiToken: string }) {
     ...common,
     backendMode: 'audiobookshelf',
     authMethod: 'manual',
+    // Required by setup/complete in manual mode (it 500s without it, after writing part of the config).
+    registration: { require_admin_approval: true },
     audiobookshelf: { server_url: 'http://abs:80', api_token: abs.apiToken, library_id: abs.libraryId, trigger_scan_after_import: true },
   };
 }

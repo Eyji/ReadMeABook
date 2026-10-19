@@ -32,7 +32,8 @@ export default defineConfig({
   use: {
     baseURL: process.env.E2E_BASE_URL,
     trace: 'on',
-    screenshot: 'on',
+    // Evidence screenshots are explicit JPEGs (lib/harness.ts snap); traces carry the rest.
+    screenshot: 'off',
     video: 'off',
     actionTimeout: 20_000,
     navigationTimeout: 60_000,

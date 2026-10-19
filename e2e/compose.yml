@@ -15,6 +15,7 @@ services:
       fake-arr:
         condition: service_healthy
       abs:
+    # Same index digest as ghcr.io/advplyr/audiobookshelf:2.37.1; Docker Hub avoids ghcr.io daemon-auth issues.
         condition: service_started
     ports:
       - "127.0.0.1:${RMAB_PORT:?RMAB_PORT is required}:3030"
@@ -39,7 +40,8 @@ services:
       rmab-e2e: "true"
 
   abs:
-    image: ${ABS_IMAGE:-ghcr.io/advplyr/audiobookshelf:2.37.1@sha256:581d68b2a6fc7ebf58d81c878a9f387cbbc0d88ac9d37b298b9cee10168af85b}
+    # Same index digest as ghcr.io/advplyr/audiobookshelf:2.37.1; Docker Hub avoids ghcr.io daemon-auth issues.
+    image: ${ABS_IMAGE:-docker.io/advplyr/audiobookshelf:2.37.1@sha256:581d68b2a6fc7ebf58d81c878a9f387cbbc0d88ac9d37b298b9cee10168af85b}
     ports:
       - "127.0.0.1::80"
     volumes:

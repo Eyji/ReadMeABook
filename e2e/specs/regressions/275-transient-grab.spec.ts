@@ -8,7 +8,7 @@
  */
 
 import { test, expect } from '@playwright/test';
-import { evidencePath, writeEvidence, waitFor, fakeArr, Rmab, type Recorded } from '../../lib/harness';
+import { snap, evidencePath, writeEvidence, waitFor, fakeArr, Rmab, type Recorded } from '../../lib/harness';
 
 const releaseOf = (r: Recorded) => {
   try {
@@ -47,7 +47,7 @@ test('#275: an HTTP 503 grab on the top release falls through to the next ranked
     writeEvidence('275/fake-arr-requests.json', await fakeArr.requests());
     writeEvidence('275/request-after-grab.json', await rmab.findRequest(book.asin).catch((e) => ({ error: String(e) })));
     await page.goto('/requests');
-    await page.screenshot({ path: evidencePath('275', 'requests-after-grab.png'), fullPage: true });
+    await snap(page, '275', 'requests-after-grab');
   }
   expect(bGrab!.status).toBe(200);
   const aGrabs = (await fakeArr.requests()).filter((r) => isGrab(r, 'A'));
@@ -70,5 +70,5 @@ test('#275: an HTTP 503 grab on the top release falls through to the next ranked
   );
   writeEvidence('275/request-done.json', done);
   await page.goto('/requests');
-  await page.screenshot({ path: evidencePath('275', 'requests-done.png'), fullPage: true });
+  await snap(page, '275', 'requests-done');
 });

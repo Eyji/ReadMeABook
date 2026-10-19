@@ -4,9 +4,9 @@
  */
 
 import { test, expect, type Page } from '@playwright/test';
-import { env, evidencePath, writeEvidence, waitFor, fakeArr, keyLeaks, authState, Rmab, Abs } from '../lib/harness';
+import { snap, env, evidencePath, writeEvidence, waitFor, fakeArr, keyLeaks, authState, Rmab, Abs } from '../lib/harness';
 
-const shot = (page: Page, name: string) => page.screenshot({ path: evidencePath('smoke', `${name}.png`), fullPage: true });
+const shot = (page: Page, name: string) => snap(page, 'smoke', name);
 
 test('smoke: a requested book is grabbed, downloaded, organized and shows up in the library', async ({ page }) => {
   await fakeArr.scenario('smoke');
