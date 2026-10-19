@@ -78,7 +78,7 @@
 - Helpers: `e2e/lib/harness.ts` (`Rmab`, `Abs`, `fakeArr`, `keyLeaks`, `waitFor`, `tableRowCounts` via `docker compose exec rmab gosu postgres psql`).
 
 ## Cleanup (every stack/unit run, in `finally`, incl. failures and Ctrl-C)
-- Before: disk ceiling (`docker system df` images+cache+volumes > 50 GB → prune `rmab-e2e-*` stacks except preview, `rmab-e2e/*` images, cache); `down -v` the project.
+- Before: disk ceiling (`docker system df` images+cache+volumes > 50 GB → prune `rmab-e2e-*` stacks with no running container (never the preview), images labelled with this run's slug, our dangling images, build cache). Pool-safe: other slots' running stacks and images are never touched. Then `down -v` the project.
 - After: `down -v --remove-orphans`; `image rm` images this run built or pulled (+ `--image` with `--rm-image`); `image prune -f --filter label=rmab-e2e=true`; `builder prune -f --keep-storage 15gb` (or `--max-used-space` on newer Docker).
 - Kept between runs: only the preview stack and its image.
 

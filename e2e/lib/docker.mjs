@@ -124,34 +124,40 @@ export function dockerDf() {
   return result;
 }
 
-/** Remove every rmab-e2e-* stack except the preview, our dangling images, and cap the build cache. */
-export function pruneLeftovers({ protect = [] } = {}) {
-  const projects = run('docker', ['ps', '-a', '--filter', 'label=com.docker.compose.project', '--format', '{{.Label "com.docker.compose.project"}}'], { capture: true, allowFail: true, quiet: true })
-    .split(/\r?\n/)
-    .concat(run('docker', ['volume', 'ls', '--format', '{{.Label "com.docker.compose.project"}}'], { capture: true, allowFail: true, quiet: true }).split(/\r?\n/))
-    .filter((p) => p.startsWith('rmab-e2e-') && p !== PREVIEW_PROJECT);
-  for (const project of new Set(projects)) {
+/**
+ * Remove rmab-e2e-* LEFTOVERS only (pool-safe: other slots may be mid-run on the same daemon).
+ * - A stack is a leftover when none of its containers is running (stopped containers or orphan volumes).
+ * - Images: only `rmab-e2e/*` images labelled with this run's slug, plus our dangling images.
+ * The preview stack and `protect` refs are never touched; other teams' images are never removed.
+ */
+export function pruneLeftovers({ slug, protect = [] } = {}) {
+  const list = (args) => run('docker', args, { capture: true, allowFail: true, quiet: true }).split(/\r?\n/).filter(Boolean);
+  const running = new Set(list(['ps', '--filter', 'label=com.docker.compose.project', '--format', '{{.Label "com.docker.compose.project"}}']));
+  const projects = new Set(
+    [...list(['ps', '-a', '--filter', 'label=com.docker.compose.project', '--format', '{{.Label "com.docker.compose.project"}}']),
+     ...list(['volume', 'ls', '--format', '{{.Label "com.docker.compose.project"}}'])]
+      .filter((p) => p.startsWith('rmab-e2e-') && p !== PREVIEW_PROJECT && !running.has(p))
+  );
+  for (const project of projects) {
     // Always pass our compose file: never let compose pick up a compose file from the cwd.
     compose(project, ['down', '-v', '--remove-orphans'], { E2E_SLUG: project.replace(/^rmab-e2e-/, ''), RMAB_IMAGE: 'unused', RMAB_PORT: '0' }, { allowFail: true });
-    // Volumes of a project whose compose file is gone: remove by label.
-    for (const v of run('docker', ['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${project}`], { capture: true, allowFail: true, quiet: true }).split(/\r?\n/).filter(Boolean)) {
-      run('docker', ['volume', 'rm', v], { allowFail: true });
+    for (const v of list(['volume', 'ls', '-q', '--filter', `label=com.docker.compose.project=${project}`])) run('docker', ['volume', 'rm', v], { allowFail: true });
+  }
+  if (slug) {
+    for (const ref of list(['images', '--filter', `label=rmab-e2e.slug=${slug}`, '--format', '{{.Repository}}:{{.Tag}}']).filter((r) => r.startsWith('rmab-e2e/') && !protect.includes(r))) {
+      run('docker', ['image', 'rm', ref], { allowFail: true });
     }
   }
-  const images = run('docker', ['images', '--filter', 'reference=rmab-e2e/*', '--format', '{{.Repository}}:{{.Tag}}'], { capture: true, allowFail: true, quiet: true })
-    .split(/\r?\n/)
-    .filter((ref) => ref && !protect.includes(ref));
-  for (const ref of images) run('docker', ['image', 'rm', ref], { allowFail: true });
   run('docker', ['image', 'prune', '-f', '--filter', `label=${LABEL}`], { allowFail: true });
   run('docker', builderPruneArgs(), { allowFail: true });
 }
 
 /** Disk ceiling check before a build: prune if images + cache + volumes exceed 50 GB. */
-export function enforceDiskCeiling({ protect, warn }) {
+export function enforceDiskCeiling({ slug, protect, warn }) {
   const df = dockerDf();
   if (df.total > DISK_CEILING_GB) {
     warn(`docker system df total ${df.total.toFixed(1)} GB > ${DISK_CEILING_GB} GB: pruning rmab-e2e leftovers and build cache`);
-    pruneLeftovers({ protect });
+    pruneLeftovers({ slug, protect });
   }
   return df;
 }

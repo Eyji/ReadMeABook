@@ -114,7 +114,13 @@ export async function fetchAndLoad(ref, { platform = { os: 'linux', architecture
         manifests: [{ mediaType: desc.mediaType || manifest.mediaType, digest: desc.digest, size: desc.size, annotations: { 'io.containerd.image.name': name, 'org.opencontainers.image.ref.name': tag } }],
       })
     );
-    writeTar(dir, ['oci-layout', 'index.json', ...fs.readdirSync(blobs).map((b) => path.join('blobs', 'sha256', b))], tar);
+    // docker-archive manifest alongside the OCI layout (the layout `docker save` emits): the classic
+    // image store only reads manifest.json; layers may stay compressed.
+    fs.writeFileSync(
+      path.join(dir, 'manifest.json'),
+      JSON.stringify([{ Config: `blobs/sha256/${manifest.config.digest.slice(7)}`, RepoTags: [name], Layers: manifest.layers.map((l) => `blobs/sha256/${l.digest.slice(7)}`) }])
+    );
+    writeTar(dir, ['oci-layout', 'index.json', 'manifest.json', ...fs.readdirSync(blobs).map((b) => path.join('blobs', 'sha256', b))], tar);
     const load = spawnSync('docker', ['load', '-i', tar], { encoding: 'utf8' });
     if (load.status !== 0) throw new Error(`docker load failed: ${load.stderr}`);
     log(`[e2e] ${load.stdout.trim()}`);

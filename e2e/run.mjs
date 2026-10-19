@@ -160,7 +160,7 @@ async function stackOrPreview(opts) {
 
   let status = 1;
   try {
-    ctx.summary.dfBefore = enforceDiskCeiling({ protect: opts.image ? [opts.image] : [], warn }).total.toFixed(1);
+    ctx.summary.dfBefore = enforceDiskCeiling({ slug: opts.slug, protect: opts.image ? [opts.image] : [], warn }).total.toFixed(1);
     compose(project, ['down', '-v', '--remove-orphans'], ctx.env, { allowFail: true }); // fresh volumes every run
 
     let image = opts.image;
