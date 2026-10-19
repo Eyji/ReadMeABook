@@ -22,10 +22,10 @@ npm test
 
 ## Project Standards
 
-The full standards live in [CLAUDE.md](CLAUDE.md). The short version:
+Start at [documentation/TABLEOFCONTENTS.md](documentation/TABLEOFCONTENTS.md), which maps each area of the app to its doc. The standards:
 
-- **Docs first:** documentation lives in `documentation/`. Start at `documentation/TABLEOFCONTENTS.md` to find the doc for the area you are changing.
-- **Docs format:** keep docs in the token-efficient format described in CLAUDE.md (bullets, tables, compact code blocks, no long prose). Update the relevant doc in the same PR as the code, and add new docs to `TABLEOFCONTENTS.md`.
+- **Docs first:** documentation lives in `documentation/`. Read the doc for the area you are changing before you change it.
+- **Docs format:** keep docs in the compact format (bullets, tables, short code blocks), matching the existing docs. Update the relevant doc in the same PR as the code, and add new docs to `TABLEOFCONTENTS.md`.
 - **File headers:** every code file starts with a header comment naming the component and linking to its doc:
   ```typescript
   /**
@@ -41,6 +41,6 @@ The full standards live in [CLAUDE.md](CLAUDE.md). The short version:
 - Link the issue it addresses, or explain the problem if there isn't one.
 - Add or update tests for the behavior you change, and make sure the full `npm test` suite passes.
 - Include screenshots for UI changes.
-- Never commit secrets, tokens or API keys, including in test fixtures and screenshots.
+- Never commit secrets, API keys or passwords, including in test fixtures and screenshots.
 
 Triage of issues and pull requests on this repo is AI-assisted.
