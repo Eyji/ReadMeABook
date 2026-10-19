@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSetupIncompleteOrAdmin } from '@/lib/middleware/auth';
+import { isMaskedSecret, isSameServiceUrl, savedCredentialUrlMismatch } from '@/lib/utils/saved-credential';
 
 export async function POST(request: NextRequest) {
   return requireSetupIncompleteOrAdmin(request, async (req) => {
@@ -18,9 +19,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If API token is masked, try to get the saved token
+    // If API token is masked, reuse the saved token — but only for the saved server URL
     let effectiveApiToken = apiToken;
-    if (!apiToken || apiToken.startsWith('••••')) {
+    if (!apiToken || isMaskedSecret(apiToken)) {
       const { getConfigService } = await import('@/lib/services/config.service');
       const configService = getConfigService();
       const savedToken = await configService.get('audiobookshelf.api_token');
@@ -28,6 +29,14 @@ export async function POST(request: NextRequest) {
       if (!savedToken) {
         return NextResponse.json(
           { error: 'API token is required' },
+          { status: 400 }
+        );
+      }
+
+      const savedUrl = await configService.get('audiobookshelf.server_url');
+      if (!isSameServiceUrl(serverUrl, savedUrl)) {
+        return NextResponse.json(
+          { error: savedCredentialUrlMismatch('audiobookshelf') },
           { status: 400 }
         );
       }

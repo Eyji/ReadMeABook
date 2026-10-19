@@ -12,6 +12,7 @@ import { getConfigService } from '@/lib/services/config.service';
 import { getDownloadClientManager, DownloadClientConfig } from '@/lib/services/download-client-manager.service';
 import { SUPPORTED_CLIENT_TYPES } from '@/lib/interfaces/download-client.interface';
 import { RMABLogger } from '@/lib/utils/logger';
+import { isMaskedSecret, isSameServiceUrl, savedCredentialUrlMismatch } from '@/lib/utils/saved-credential';
 
 const logger = RMABLogger.create('API.TestDownloadClient');
 
@@ -49,7 +50,7 @@ export async function POST(request: NextRequest) {
 
         // If password is masked, fetch the actual value from download client manager (decrypted)
         let actualPassword = password;
-        if (password && (password.startsWith('••••') || password === '********')) {
+        if (isMaskedSecret(password) || password === '********') {
           const configService = getConfigService();
           const manager = getDownloadClientManager(configService);
           const clients = await manager.getAllClients();
@@ -60,6 +61,14 @@ export async function POST(request: NextRequest) {
           if (!matchingClient?.password) {
             return NextResponse.json(
               { success: false, error: 'No stored password/API key found. Please re-enter it.' },
+              { status: 400 }
+            );
+          }
+
+          // Saved secret is only reused for that client's saved URL
+          if (!isSameServiceUrl(url, matchingClient.url)) {
+            return NextResponse.json(
+              { success: false, error: savedCredentialUrlMismatch('downloadClient') },
               { status: 400 }
             );
           }

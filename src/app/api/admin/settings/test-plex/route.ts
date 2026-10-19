@@ -8,6 +8,7 @@ import { requireAuth, requireAdmin, AuthenticatedRequest } from '@/lib/middlewar
 import { getConfigService } from '@/lib/services/config.service';
 import { getPlexService } from '@/lib/integrations/plex.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { isMaskedSecret, isSameServiceUrl, savedCredentialUrlMismatch } from '@/lib/utils/saved-credential';
 
 const logger = RMABLogger.create('API.Admin.Settings.TestPlex');
 
@@ -26,13 +27,21 @@ export async function POST(request: NextRequest) {
 
         // If token is masked, fetch the actual value from database (decrypted)
         let actualToken = token;
-        if (token.startsWith('••••')) {
+        if (isMaskedSecret(token)) {
           const configService = getConfigService();
           const storedToken = await configService.get('plex_token');
 
           if (!storedToken) {
             return NextResponse.json(
               { success: false, error: 'No stored token found. Please re-enter your Plex token.' },
+              { status: 400 }
+            );
+          }
+
+          // Saved token is only reused for the saved server URL
+          if (!isSameServiceUrl(url, await configService.get('plex_url'))) {
+            return NextResponse.json(
+              { success: false, error: savedCredentialUrlMismatch('plex') },
               { status: 400 }
             );
           }

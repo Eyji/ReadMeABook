@@ -9,6 +9,7 @@ import { getConfigService } from '@/lib/services/config.service';
 import { getDownloadClientManager, DownloadClientConfig } from '@/lib/services/download-client-manager.service';
 import { SUPPORTED_CLIENT_TYPES } from '@/lib/interfaces/download-client.interface';
 import { RMABLogger } from '@/lib/utils/logger';
+import { isMaskedSecret, isSameServiceUrl, savedCredentialUrlMismatch } from '@/lib/utils/saved-credential';
 
 const logger = RMABLogger.create('API.Admin.Settings.DownloadClients.Categories');
 
@@ -63,6 +64,14 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
               { error: 'Client not found' },
               { status: 404 }
+            );
+          }
+
+          // Saved secret is only reused for the client's saved URL
+          if (existingClient.password && !isSameServiceUrl(url, existingClient.url)) {
+            return NextResponse.json(
+              { error: savedCredentialUrlMismatch('downloadClient') },
+              { status: 400 }
             );
           }
 

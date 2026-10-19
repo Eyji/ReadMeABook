@@ -8,6 +8,7 @@ import { requireAuth, requireAdmin, AuthenticatedRequest } from '@/lib/middlewar
 import { getConfigService } from '@/lib/services/config.service';
 import { ProwlarrService } from '@/lib/integrations/prowlarr.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { isMaskedSecret, isSameServiceUrl, savedCredentialUrlMismatch } from '@/lib/utils/saved-credential';
 
 const logger = RMABLogger.create('API.Admin.Settings.TestProwlarr');
 
@@ -26,13 +27,22 @@ export async function POST(request: NextRequest) {
 
         // If API key is masked, fetch the actual value from database (decrypted)
         let actualApiKey = apiKey;
-        if (apiKey.startsWith('••••')) {
+        if (isMaskedSecret(apiKey)) {
           const configService = getConfigService();
           const storedApiKey = await configService.get('prowlarr_api_key');
 
           if (!storedApiKey) {
             return NextResponse.json(
               { success: false, error: 'No stored API key found. Please re-enter your Prowlarr API key.' },
+              { status: 400 }
+            );
+          }
+
+          // Saved key is only reused for the saved Prowlarr URL
+          const savedUrl = (await configService.get('prowlarr_url')) || process.env.PROWLARR_URL;
+          if (!isSameServiceUrl(url, savedUrl)) {
+            return NextResponse.json(
+              { success: false, error: savedCredentialUrlMismatch('prowlarr') },
               { status: 400 }
             );
           }
