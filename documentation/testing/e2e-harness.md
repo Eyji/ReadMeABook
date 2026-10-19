@@ -32,7 +32,7 @@
 | Service | Image | Host port |
 |---|---|---|
 | `rmab` | `${RMAB_IMAGE}` | `127.0.0.1:${RMAB_PORT}:3030` |
-| `abs` | `ghcr.io/advplyr/audiobookshelf:2.37.1@sha256:581d68…` | `127.0.0.1::80` (ephemeral) |
+| `abs` | `docker.io/advplyr/audiobookshelf:2.37.1@sha256:581d68…` (same index digest as ghcr) | `127.0.0.1::80` (ephemeral) |
 | `fake-arr` | `rmab-e2e/fake-arr:<slug>` (built, `node:20-alpine@sha256:fb4cd1…`) | `127.0.0.1::9999` (control, ephemeral) |
 - Named volumes only: `rmab-config`, `rmab-cache`, `pgdata`, `redis`, `downloads` (rmab+fake-arr), `media` (rmab+abs+fake-arr), `abs-config`, `abs-metadata`.
 - Ephemeral ports are read with `docker compose port`. fake-arr (root) chowns `/downloads`, `/media`, `/media/audiobooks` to `PUID:PGID` before RMAB starts (nothing in the RMAB image does).
@@ -83,6 +83,9 @@
 - Kept between runs: only the preview stack and its image.
 
 ## Critical Issues
+- `setup/complete` with `authMethod: manual` 500s without a `registration` object (after writing part of the config); bootstrap always sends `registration: { require_admin_approval: true }`.
+- A daemon with broken ghcr.io credentials fails even public pulls (`denied: denied`). `--upgrade-from` then falls back to `e2e/lib/fetch-image.mjs`: anonymous registry API, every blob sha256-verified, OCI layout → `docker load`.
+- Evidence screenshots: explicit 1280x720 JPEGs (`snap()` in `lib/harness.ts`); Playwright's own screenshots are off, traces on.
 - `npx playwright install` garbage-collects other Playwright browser builds it considers unused in `%LOCALAPPDATA%\ms-playwright`; set `PLAYWRIGHT_BROWSERS_PATH` to isolate if other projects share the cache.
 - Fixture generation needs Audnexus reachable at fake-arr build time unless `--offline-fixtures`.
 

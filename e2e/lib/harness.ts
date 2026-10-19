@@ -19,10 +19,11 @@ export const urls = {
   abs: () => env('E2E_ABS_URL'),
 };
 
+/** Absolute path under the evidence dir; parts may contain '/'. Parent directories are created. */
 export const evidencePath = (...parts: string[]) => {
-  const dir = path.join(env('E2E_EVIDENCE_DIR'), ...parts.slice(0, -1));
-  fs.mkdirSync(dir, { recursive: true });
-  return path.join(dir, parts[parts.length - 1]);
+  const file = path.join(env('E2E_EVIDENCE_DIR'), ...parts.flatMap((p) => p.split('/')));
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  return file;
 };
 
 /** Tokens and ids written by bootstrap.ts. */
