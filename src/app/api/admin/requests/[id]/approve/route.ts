@@ -5,6 +5,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth, requireAdmin, AuthenticatedRequest } from '@/lib/middleware/auth';
+import { guardEbookSelection, guardTorrentSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
 import { RMABLogger } from '@/lib/utils/logger';
@@ -83,8 +84,19 @@ export async function POST(
           const effectiveTorrent = adminSelectedTorrent || existingRequest.selectedTorrent;
 
           if (effectiveTorrent) {
-            const selectedTorrent = effectiveTorrent as any;
             const torrentSource = adminSelectedTorrent ? 'admin' : 'user';
+
+            // Same rules for admin picks and stored user picks (older rows were never validated)
+            const candidate = effectiveTorrent as any;
+            const selectionCheck = isEbookRequest && candidate?.source
+              ? await guardEbookSelection(candidate)
+              : await guardTorrentSelection(candidate);
+            if (!selectionCheck.ok) {
+              return rejectedSelectionResponse(
+                `The ${torrentSource}-selected release cannot be used: ${selectionCheck.error}. Pick a release with interactive search.`
+              );
+            }
+            const selectedTorrent = selectionCheck.value as any;
 
             // Download the selected torrent directly
             logger.info(`Request ${id} has ${torrentSource}-selected torrent, starting download`, {

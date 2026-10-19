@@ -15,6 +15,8 @@ import { getConfigService } from '@/lib/services/config.service';
 import { findPlexMatch } from '@/lib/utils/audiobook-matcher';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { denyWithoutInteractiveSearchAccess } from '@/lib/middleware/interactive-search-access';
+import { guardEbookSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 
 const logger = RMABLogger.create('API.Audiobooks.SelectEbook');
 
@@ -62,7 +64,7 @@ export async function POST(
     try {
       const { asin } = await params;
       const body = await request.json();
-      const selectedEbook = body.ebook as SelectedEbook;
+      let selectedEbook = body.ebook as SelectedEbook;
 
       if (!asin || asin.length !== 10) {
         return NextResponse.json(
@@ -85,6 +87,14 @@ export async function POST(
       if (!selectedEbook.source) {
         return NextResponse.json({ error: 'Ebook source not specified' }, { status: 400 });
       }
+
+      const accessDenied = await denyWithoutInteractiveSearchAccess(req.user.id);
+      if (accessDenied) return accessDenied;
+
+      // Indexer picks must be Prowlarr/magnet links; Anna's Archive links are rebuilt from the md5
+      const ebookCheck = await guardEbookSelection(selectedEbook);
+      if (!ebookCheck.ok) return rejectedSelectionResponse(ebookCheck.error);
+      selectedEbook = ebookCheck.value;
 
       // First, fetch audiobook data from Audible (works for books imported outside RMAB)
       const audibleService = getAudibleService();

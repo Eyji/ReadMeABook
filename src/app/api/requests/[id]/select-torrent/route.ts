@@ -9,6 +9,8 @@ import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
 import { TorrentResult } from '@/lib/utils/ranking-algorithm';
 import { RMABLogger } from '@/lib/utils/logger';
+import { denyWithoutInteractiveSearchAccess } from '@/lib/middleware/interactive-search-access';
+import { guardTorrentSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 
 const logger = RMABLogger.create('API.SelectTorrent');
 
@@ -29,16 +31,17 @@ export async function POST(
         );
       }
 
+      const accessDenied = await denyWithoutInteractiveSearchAccess(req.user.id);
+      if (accessDenied) return accessDenied;
+
       const { id } = await params;
       const body = await req.json();
-      const { torrent } = body as { torrent: TorrentResult };
+      const { torrent: rawTorrent } = (body ?? {}) as { torrent?: TorrentResult };
 
-      if (!torrent) {
-        return NextResponse.json(
-          { error: 'ValidationError', message: 'Torrent data is required' },
-          { status: 400 }
-        );
-      }
+      // Only magnet links or Prowlarr download links may be fetched on the user's behalf
+      const torrentCheck = await guardTorrentSelection(rawTorrent);
+      if (!torrentCheck.ok) return rejectedSelectionResponse(torrentCheck.error);
+      const torrent = torrentCheck.value;
 
       const requestRecord = await prisma.request.findUnique({
         where: { id },

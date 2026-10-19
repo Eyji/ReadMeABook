@@ -9,6 +9,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { DOWNLOAD_CLIENT_TIMEOUT } from '../constants/download-timeouts';
 import { TorrentResult } from '../utils/ranking-algorithm';
 import { RMABLogger } from '../utils/logger';
+import { redactUrl } from '../utils/prowlarr-url';
 
 // Module-level logger
 const logger = RMABLogger.create('Prowlarr');
@@ -448,7 +449,7 @@ export class ProwlarrService {
       // Debug: Log first few results to see their protocols
       if (results.length > 0 && results.length <= 5) {
         results.forEach((r, i) => {
-          logger.info(` Result ${i + 1}: protocol="${r.protocol || 'undefined'}", url="${r.downloadUrl.substring(0, 80)}..."`);
+          logger.info(` Result ${i + 1}: protocol="${r.protocol || 'undefined'}", url="${redactUrl(r.downloadUrl).substring(0, 80)}..."`);
         });
       } else if (results.length > 5) {
         logger.info(` First 3 results:`);
@@ -660,13 +661,8 @@ export function invalidateProwlarrService(): void {
 
 export async function getProwlarrService(): Promise<ProwlarrService> {
   if (!prowlarrService) {
-    // Get configuration from database
-    const { getConfigService } = await import('@/lib/services/config.service');
-    const configService = getConfigService();
-
-    const config = await configService.getMany(['prowlarr_url', 'prowlarr_api_key']);
-    const baseUrl = config.prowlarr_url || process.env.PROWLARR_URL || 'http://prowlarr:9696';
-    const apiKey = config.prowlarr_api_key || process.env.PROWLARR_API_KEY;
+    const { getProwlarrConnection } = await import('./prowlarr-connection');
+    const { baseUrl, apiKey } = await getProwlarrConnection();
 
     if (!apiKey) {
       throw new Error('Prowlarr API key not configured');

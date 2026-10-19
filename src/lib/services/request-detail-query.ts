@@ -1,0 +1,89 @@
+/**
+ * Component: Request Detail Query Shapes (GET /api/requests/[id])
+ * Documentation: documentation/backend/api.md
+ *
+ * Non-admin callers (owners, API tokens) get an explicit field list that leaves out
+ * internal job/download data: Job.payload/result/stackTrace,
+ * DownloadHistory.magnetLink/torrentUrl and Request.selectedTorrent.
+ */
+
+import type { Prisma } from '@/generated/prisma/client';
+
+const LATEST_SELECTED_DOWNLOAD = { where: { selected: true }, take: 1 } as const;
+const RECENT_JOBS = { orderBy: { createdAt: 'desc' }, take: 5 } as const;
+
+export const ADMIN_REQUEST_DETAIL_INCLUDE = {
+  audiobook: true,
+  user: { select: { id: true, plexUsername: true } },
+  downloadHistory: LATEST_SELECTED_DOWNLOAD,
+  jobs: RECENT_JOBS,
+} satisfies Prisma.RequestInclude;
+
+export const OWNER_REQUEST_DETAIL_SELECT = {
+  id: true,
+  userId: true,
+  audiobookId: true,
+  status: true,
+  progress: true,
+  priority: true,
+  errorMessage: true,
+  searchAttempts: true,
+  downloadAttempts: true,
+  importAttempts: true,
+  maxImportRetries: true,
+  ebookAutoRetryCount: true,
+  lastSearchAt: true,
+  customSearchTerms: true,
+  lastImportAt: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+  releaseDate: true,
+  type: true,
+  parentRequestId: true,
+  deletedAt: true,
+  audiobook: true,
+  user: { select: { id: true, plexUsername: true } },
+  downloadHistory: {
+    ...LATEST_SELECTED_DOWNLOAD,
+    select: {
+      id: true,
+      requestId: true,
+      indexerName: true,
+      indexerId: true,
+      torrentName: true,
+      torrentHash: true,
+      nzbId: true,
+      torrentSizeBytes: true,
+      seeders: true,
+      leechers: true,
+      qualityScore: true,
+      selected: true,
+      downloadClient: true,
+      downloadClientId: true,
+      downloadStatus: true,
+      downloadError: true,
+      downloadPath: true,
+      startedAt: true,
+      completedAt: true,
+      createdAt: true,
+    },
+  },
+  jobs: {
+    ...RECENT_JOBS,
+    select: {
+      id: true,
+      requestId: true,
+      type: true,
+      status: true,
+      priority: true,
+      attempts: true,
+      maxAttempts: true,
+      errorMessage: true,
+      startedAt: true,
+      completedAt: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+  },
+} satisfies Prisma.RequestSelect;

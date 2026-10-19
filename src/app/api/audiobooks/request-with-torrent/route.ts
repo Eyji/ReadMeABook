@@ -13,6 +13,8 @@ import { findPlexMatch } from '@/lib/utils/audiobook-matcher';
 import { getAudibleService } from '@/lib/integrations/audible.service';
 import { z } from 'zod';
 import { RMABLogger } from '@/lib/utils/logger';
+import { denyWithoutInteractiveSearchAccess } from '@/lib/middleware/interactive-search-access';
+import { guardTorrentSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 
 const logger = RMABLogger.create('API.RequestWithTorrent');
 
@@ -61,8 +63,15 @@ export async function POST(request: NextRequest) {
         );
       }
 
+      const accessDenied = await denyWithoutInteractiveSearchAccess(req.user.id);
+      if (accessDenied) return accessDenied;
+
       const body = await req.json();
       const { audiobook, torrent } = RequestWithTorrentSchema.parse(body);
+
+      // Only magnet links or Prowlarr download links may be fetched on the user's behalf
+      const torrentCheck = await guardTorrentSelection(torrent);
+      if (!torrentCheck.ok) return rejectedSelectionResponse(torrentCheck.error);
 
       // First check: Is there an existing audiobook request in 'downloaded' or 'available' status?
       // This catches the gap where files are organized but Plex hasn't scanned yet

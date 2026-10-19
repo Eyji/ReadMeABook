@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db';
 import { getJobQueueService } from '@/lib/services/job-queue.service';
 import { getConfigService } from '@/lib/services/config.service';
 import { RMABLogger } from '@/lib/utils/logger';
+import { guardEbookSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 
 const logger = RMABLogger.create('API.SelectEbook');
 
@@ -42,7 +43,7 @@ export async function POST(
       try {
         const { id: parentRequestId } = await params;
         const body = await request.json();
-        const selectedEbook = body.ebook as SelectedEbook;
+        let selectedEbook = body.ebook as SelectedEbook;
 
         if (!selectedEbook) {
           return NextResponse.json({ error: 'No ebook selected' }, { status: 400 });
@@ -51,6 +52,11 @@ export async function POST(
         if (!selectedEbook.source) {
           return NextResponse.json({ error: 'Ebook source not specified' }, { status: 400 });
         }
+
+        // Indexer picks must be Prowlarr/magnet links; Anna's Archive links are rebuilt from the md5
+        const ebookCheck = await guardEbookSelection(selectedEbook);
+        if (!ebookCheck.ok) return rejectedSelectionResponse(ebookCheck.error);
+        selectedEbook = ebookCheck.value;
 
         // Get the request - could be an audiobook request or an existing ebook request
         const foundRequest = await prisma.request.findUnique({

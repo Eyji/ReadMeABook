@@ -8,6 +8,7 @@ import { prisma } from '../db';
 import { getConfigService } from '../services/config.service';
 import { getDownloadClientManager } from '../services/download-client-manager.service';
 import { ProwlarrService } from '../integrations/prowlarr.service';
+import { getProwlarrConnection } from '../integrations/prowlarr-connection';
 import { RMABLogger } from '../utils/logger';
 import { isTransientConnectionError } from '../utils/connection-errors';
 import {
@@ -52,13 +53,12 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
     const config = await getConfigService();
     const manager = getDownloadClientManager(config);
 
-    // Include Prowlarr API key as source header so NZB/torrent downloads from
-    // Prowlarr proxy URLs are authenticated (fixes 403 for indexers like NZBFinder)
-    const prowlarrApiKey = (await config.getMany(['prowlarr_api_key'])).prowlarr_api_key || process.env.PROWLARR_API_KEY;
-    const sourceHeaders: Record<string, string> = {};
-    if (prowlarrApiKey) {
-      sourceHeaders['X-Api-Key'] = prowlarrApiKey;
-    }
+    // Prowlarr credentials for authenticated proxy-download fetches (fixes 403 for
+    // indexers like NZBFinder). The fetcher sends the key only to Prowlarr download hops.
+    const prowlarr = await getProwlarrConnection();
+    const sourceAuth = prowlarr.apiKey
+      ? { prowlarrBaseUrl: prowlarr.baseUrl, apiKey: prowlarr.apiKey }
+      : undefined;
 
     for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
       const candidate = candidates[candidateIndex];
@@ -83,7 +83,7 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
         downloadClientId = await client.addDownload(candidate.downloadUrl, {
           category,
           priority: 'normal',
-          sourceHeaders,
+          sourceAuth,
         });
       } catch (error) {
         if (!(error instanceof DownloadSourceError)) {
