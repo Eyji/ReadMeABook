@@ -12,7 +12,7 @@ import * as parseTorrentModule from 'parse-torrent';
 import FormData from 'form-data';
 import { RMABLogger } from '../utils/logger';
 import { fetchDownloadSource, type SourceAuth } from './download-source';
-import { redactUrl } from '../utils/prowlarr-url';
+import { urlForLog } from '../utils/prowlarr-url';
 import { PathMapper, PathMappingConfig } from '../utils/path-mapper';
 import {
   IDownloadClient,
@@ -376,7 +376,7 @@ export class QBittorrentService implements IDownloadClient {
     category: string,
     options?: AddTorrentOptions
   ): Promise<string> {
-    logger.info(` Downloading .torrent file from: ${redactUrl(torrentUrl)}`);
+    logger.info(` Downloading .torrent file from: ${urlForLog(torrentUrl)}`);
 
     // Shared fetcher: follows every redirect hop (relative or absolute), resolves a
     // magnet at any hop, and scopes the Prowlarr key to Prowlarr download hops.

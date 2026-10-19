@@ -15,6 +15,7 @@ import { getAudibleService } from '@/lib/integrations/audible.service';
 import { RMABLogger } from '@/lib/utils/logger';
 import { shouldSkipAutoSearch } from '@/lib/utils/release-date';
 import { seedAsin, getSiblingAsins } from '@/lib/services/works.service';
+import { sanitizeCoverArtUrl } from '@/lib/utils/cover-art-url';
 
 const logger = RMABLogger.create('RequestCreator');
 
@@ -141,7 +142,7 @@ export async function createRequestForUser(
         author: audiobook.author,
         narrator: audiobook.narrator,
         description: audiobook.description,
-        coverArtUrl: audiobook.coverArtUrl,
+        coverArtUrl: sanitizeCoverArtUrl(audiobook.coverArtUrl),
         year,
         series,
         seriesPart,
@@ -155,7 +156,8 @@ export async function createRequestForUser(
     const updates: Record<string, any> = {};
     if (audiobook.title && audiobook.title !== audiobookRecord.title) updates.title = audiobook.title;
     if (audiobook.author && audiobook.author !== audiobookRecord.author) updates.author = audiobook.author;
-    if (audiobook.coverArtUrl && !audiobookRecord.coverArtUrl) updates.coverArtUrl = audiobook.coverArtUrl;
+    const safeCoverArtUrl = sanitizeCoverArtUrl(audiobook.coverArtUrl);
+    if (safeCoverArtUrl && !audiobookRecord.coverArtUrl) updates.coverArtUrl = safeCoverArtUrl;
     if (year) updates.year = year;
     if (series) updates.series = series;
     if (seriesPart) updates.seriesPart = seriesPart;

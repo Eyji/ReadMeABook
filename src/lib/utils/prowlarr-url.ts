@@ -1,12 +1,12 @@
 /**
- * Component: Prowlarr Download URL Rules (key scoping, validation, redaction)
+ * Component: Prowlarr Download URL Rules (key scoping, validation, log-safe URLs)
  * Documentation: documentation/phase3/download-clients.md
  *
  * Pure helpers. The Prowlarr API key may only travel to the configured
  * Prowlarr origin, and only on its proxy-download path (`/{indexerId}/download`).
  */
 
-import { REDACTED_QUERY_PARAMS, REDACTED_VALUE } from '@/lib/constants/download-source';
+import { REDACTED_VALUE } from '@/lib/constants/download-source';
 
 export interface ProwlarrBase {
   origin: string;
@@ -50,9 +50,15 @@ export function isProwlarrDownloadUrl(url: string, base: ProwlarrBase | null): b
   return DOWNLOAD_PATH_PATTERN.test(parsed.pathname.slice(base.basePath.length));
 }
 
-/** True for a `magnet:?` URI. */
-export function isMagnetUri(url: string): boolean {
-  return /^magnet:\?/i.test(url.trim());
+const MAGNET_PATTERN = /^magnet:\?[^\s]+$/i;
+
+/**
+ * True for a single `magnet:?` URI with no whitespace anywhere. Download clients
+ * (e.g. qBittorrent's `urls` field) split on newlines, so a value with embedded
+ * whitespace could smuggle extra URLs.
+ */
+export function isMagnetUri(url: unknown): boolean {
+  return typeof url === 'string' && MAGNET_PATTERN.test(url);
 }
 
 /**
@@ -81,15 +87,17 @@ export function withApiKeyParam(url: string, apiKey: string): string {
   return `${head}${separator}apikey=${encodeURIComponent(apiKey)}${tail}`;
 }
 
-const SECRET_PARAM_PATTERN = new RegExp(
-  `([?&](?:${REDACTED_QUERY_PARAMS.map(escapeRegExp).join('|')})=)[^&#]*`,
-  'gi'
-);
-
-/** Mask secret-looking query values and URL credentials for logs and error messages. */
-export function redactUrl(url: string | undefined | null): string {
+/**
+ * Loggable form of a download URL: scheme + host only (`magnet:` for magnets).
+ * Paths and queries can carry indexer passkeys in many shapes, so none are logged.
+ */
+export function urlForLog(url: string | undefined | null): string {
   if (!url) return '';
-  return url
-    .replace(SECRET_PARAM_PATTERN, `$1${REDACTED_VALUE}`)
-    .replace(/^([a-z][a-z0-9+.-]*:\/\/)[^/@\s]*@/i, `$1${REDACTED_VALUE}@`);
+  if (/^magnet:/i.test(url.trim())) return 'magnet:';
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.host ? `${parsed.protocol}//${parsed.host}` : `${parsed.protocol}`;
+  } catch {
+    return '(invalid URL)';
+  }
 }

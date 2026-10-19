@@ -10,6 +10,7 @@ import { RMAB_USER_AGENT } from './user-agent';
 import { tagMultipleFiles, checkFfmpegAvailable } from './metadata-tagger';
 import { RMABLogger } from './logger';
 import { copyFile } from './copy-file';
+import { MAX_COVER_ART_BYTES, cachedThumbnailPath, isAllowedRemoteCoverUrl } from './cover-art-url';
 
 const moduleLogger = RMABLogger.create('FileOrganizer');
 import {
@@ -726,26 +727,26 @@ export class FileOrganizer {
     const targetPath = path.join(targetDir, 'cover.jpg');
 
     try {
-      // Check if this is a cached thumbnail (local file)
-      if (url.startsWith('/api/cache/thumbnails/')) {
-        // Extract filename from the API path
-        const filename = url.replace('/api/cache/thumbnails/', '');
-        const cachedPath = path.join('/app/cache/thumbnails', filename);
-
-        // Copy from local cache instead of downloading
+      // Cached thumbnail (plain file name inside the cache dir only)
+      const cachedPath = cachedThumbnailPath(url);
+      if (cachedPath) {
         await copyFile(cachedPath, targetPath);
         await fs.chmod(targetPath, this.fileMode);
-        moduleLogger.debug(`Copied cover art from cache: ${filename}`);
-      } else {
-        // Download from external URL (e.g., Audible CDN)
+        moduleLogger.debug(`Copied cover art from cache: ${path.basename(cachedPath)}`);
+      } else if (isAllowedRemoteCoverUrl(url)) {
+        // Known Audible/Amazon image host over https; no redirects to other hosts
         const response = await axios.get(url, {
           responseType: 'arraybuffer',
           timeout: 30000,
+          maxRedirects: 0,
+          maxContentLength: MAX_COVER_ART_BYTES,
           headers: { 'User-Agent': RMAB_USER_AGENT },
         });
 
         await fs.writeFile(targetPath, response.data);
         moduleLogger.debug(`Downloaded cover art from URL`);
+      } else {
+        throw new Error('Cover art URL is not a cached thumbnail or a known cover image host');
       }
     } catch (error) {
       moduleLogger.error('Failed to download cover art', { error: error instanceof Error ? error.message : String(error) });

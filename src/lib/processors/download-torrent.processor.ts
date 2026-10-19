@@ -9,6 +9,7 @@ import { getConfigService } from '../services/config.service';
 import { getDownloadClientManager } from '../services/download-client-manager.service';
 import { ProwlarrService } from '../integrations/prowlarr.service';
 import { getProwlarrConnection } from '../integrations/prowlarr-connection';
+import { isMagnetUri } from '../utils/prowlarr-url';
 import { RMABLogger } from '../utils/logger';
 import { isTransientConnectionError } from '../utils/connection-errors';
 import {
@@ -62,6 +63,13 @@ export async function processDownloadTorrent(payload: DownloadTorrentPayload): P
 
     for (let candidateIndex = 0; candidateIndex < candidates.length; candidateIndex++) {
       const candidate = candidates[candidateIndex];
+
+      // A magnet must be one whitespace-free URI (clients split their URL lists on newlines)
+      if (/^magnet:/i.test(candidate.downloadUrl ?? '') && !isMagnetUri(candidate.downloadUrl)) {
+        logger.warn(`Skipping release with a malformed magnet link: ${candidate.title}`, { indexer: candidate.indexer });
+        if (candidateIndex < candidates.length - 1) continue;
+        throw new Error(`Release "${candidate.title}" has a malformed magnet link`);
+      }
       const isUsenet = ProwlarrService.isNZBResult(candidate);
       const protocol = isUsenet ? 'usenet' : 'torrent';
       const client = await manager.getClientServiceForProtocol(protocol);

@@ -3,6 +3,8 @@
  * Documentation: documentation/phase3/download-clients.md
  */
 
+import { Agent as HttpsAgent } from 'node:https';
+import axios from 'axios';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SourceServers,
@@ -107,6 +109,26 @@ describe('fetchDownloadSource', () => {
     expect(servers.requests).toHaveLength(6);
   });
 
+  it('aborts a slow-drip source at the overall deadline', async () => {
+    servers.on('other', '/drip', (res) => {
+      res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
+      const timer = setInterval(() => res.write('d'), 50);
+      res.on('close', () => clearInterval(timer));
+    });
+    const started = Date.now();
+
+    await expect(
+      fetchDownloadSource(`${servers.otherUrl}/drip`, { allowMagnet: true, timeoutMs: 500 })
+    ).rejects.toThrow('Timed out resolving download source');
+    expect(Date.now() - started).toBeLessThan(2500);
+  });
+
+  it('rejects a redirect to a magnet with embedded whitespace', async () => {
+    // A tab is a legal header byte; a client that split on whitespace would fetch the second URL
+    servers.on('other', '/smuggle', redirectTo(`${TEST_MAGNET}\thttp://evil.example/x`));
+    await expect(fetchTorrent(`${servers.otherUrl}/smuggle`)).rejects.toThrow('Invalid redirect location');
+  });
+
   it('rejects redirects to non-http schemes', async () => {
     servers.on('other', '/bad', redirectTo('file:///etc/passwd'));
     await expect(fetchTorrent(`${servers.otherUrl}/bad`)).rejects.toThrow('Invalid redirect location');
@@ -133,5 +155,31 @@ describe('fetchDownloadSource', () => {
     expect(error.sourceUrl).not.toContain('tracker-secret');
     expect(logged.join('\n')).not.toContain(TEST_PROWLARR_KEY);
     expect(logged.join('\n')).not.toContain('tracker-secret');
+  });
+});
+
+describe('fetchDownloadSource httpsAgent scope', () => {
+  const agent = new HttpsAgent({ rejectUnauthorized: false });
+  const redirect = (location: string) => ({ isAxiosError: true, response: { status: 302, headers: { location } } });
+
+  it('uses the agent only on https hops of the starting origin', async () => {
+    const get = vi.spyOn(axios, 'get')
+      .mockRejectedValueOnce(redirect('https://other.example/file'))
+      .mockResolvedValueOnce({ data: TEST_TORRENT, headers: {} });
+
+    await fetchDownloadSource('https://prowlarr.example/1/download', { allowMagnet: true, timeoutMs: 5000, httpsAgent: agent });
+
+    expect(get.mock.calls[0][1]?.httpsAgent).toBe(agent);
+    expect(get.mock.calls[1][1]?.httpsAgent).toBeUndefined();
+  });
+
+  it('never uses the agent when the starting URL is plain http', async () => {
+    const get = vi.spyOn(axios, 'get')
+      .mockRejectedValueOnce(redirect('https://prowlarr.example/next'))
+      .mockResolvedValueOnce({ data: TEST_TORRENT, headers: {} });
+
+    await fetchDownloadSource('http://prowlarr.example/1/download', { allowMagnet: true, timeoutMs: 5000, httpsAgent: agent });
+
+    expect(get.mock.calls.every(([, config]) => config?.httpsAgent === undefined)).toBe(true);
   });
 });

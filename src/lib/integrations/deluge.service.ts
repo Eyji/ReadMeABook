@@ -11,7 +11,7 @@ import { DOWNLOAD_CLIENT_TIMEOUT } from '../constants/download-timeouts';
 import * as parseTorrentModule from 'parse-torrent';
 import { RMABLogger } from '../utils/logger';
 import { fetchDownloadSource } from './download-source';
-import { redactUrl } from '../utils/prowlarr-url';
+import { urlForLog } from '../utils/prowlarr-url';
 import { PathMapper, PathMappingConfig } from '../utils/path-mapper';
 import {
   IDownloadClient, DownloadClientType, ProtocolType,
@@ -188,7 +188,7 @@ export class DelugeService implements IDownloadClient {
   }
 
   private async addTorrentFile(torrentUrl: string, category: string, options?: AddDownloadOptions): Promise<string> {
-    logger.info(`Downloading .torrent file from: ${redactUrl(torrentUrl)}`);
+    logger.info(`Downloading .torrent file from: ${urlForLog(torrentUrl)}`);
 
     // Shared fetcher: every redirect hop, magnet at any hop, Prowlarr key scoped to Prowlarr download hops
     const source = await fetchDownloadSource(torrentUrl, {

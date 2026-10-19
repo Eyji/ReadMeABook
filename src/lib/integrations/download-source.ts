@@ -22,7 +22,7 @@ import {
   isMagnetUri,
   isProwlarrDownloadUrl,
   parseProwlarrBase,
-  redactUrl,
+  urlForLog,
   withApiKeyParam,
 } from '@/lib/utils/prowlarr-url';
 
@@ -39,8 +39,12 @@ export interface FetchSourceOptions {
   sourceAuth?: SourceAuth;
   /** Torrent clients accept a magnet result; usenet clients do not */
   allowMagnet: boolean;
-  /** One deadline shared by every hop (ms) */
+  /** Hard deadline for the whole fetch, all hops and body included (ms) */
   timeoutMs: number;
+  /**
+   * Agent for https hops on the starting URL's origin only (a usenet client's
+   * "disable SSL verify" setting for e.g. a self-signed Prowlarr). Never used on other hosts.
+   */
   httpsAgent?: HttpsAgent;
 }
 
@@ -53,6 +57,14 @@ function magnetResult(magnetUrl: string, allowMagnet: boolean): FetchedSource {
     throw new Error('Download source resolved to a magnet link, but this client needs an .nzb file');
   }
   return { kind: 'magnet', magnetUrl };
+}
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
 }
 
 function isHttpUrl(url: string): boolean {
@@ -72,14 +84,18 @@ export async function fetchDownloadSource(url: string, options: FetchSourceOptio
   const auth = options.sourceAuth?.apiKey ? options.sourceAuth : undefined;
   const prowlarrBase = auth ? parseProwlarrBase(auth.prowlarrBaseUrl) : null;
   const deadline = Date.now() + options.timeoutMs;
+  // Hard cap: axios `timeout` is an inactivity timer, so a slow-drip server could outlast it
+  const deadlineSignal = AbortSignal.timeout(options.timeoutMs);
   let currentUrl = url.trim();
+  const startOrigin = originOf(currentUrl);
+  const startIsHttps = currentUrl.startsWith('https:');
 
   for (let hop = 0; hop <= MAX_SOURCE_REDIRECT_HOPS; hop++) {
     if (isMagnetUri(currentUrl)) {
       return magnetResult(currentUrl, options.allowMagnet);
     }
     if (!isHttpUrl(currentUrl)) {
-      throw new Error(`Invalid redirect location: ${redactUrl(currentUrl)}`);
+      throw new Error(`Invalid redirect location: ${urlForLog(currentUrl)}`);
     }
 
     const remaining = deadline - Date.now();
@@ -102,9 +118,13 @@ export async function fetchDownloadSource(url: string, options: FetchSourceOptio
         maxContentLength: MAX_SOURCE_FILE_BYTES,
         maxBodyLength: MAX_SOURCE_FILE_BYTES,
         headers,
-        httpsAgent: options.httpsAgent,
+        signal: deadlineSignal,
+        httpsAgent: startIsHttps && originOf(requestUrl) === startOrigin ? options.httpsAgent : undefined,
       });
     } catch (error) {
+      if (deadlineSignal.aborted) {
+        throw new Error(`Timed out resolving download source after ${Math.round(options.timeoutMs / 1000)}s`);
+      }
       if (!axios.isAxiosError(error) || !error.response) {
         throw error;
       }
@@ -112,22 +132,24 @@ export async function fetchDownloadSource(url: string, options: FetchSourceOptio
       if (status >= 300 && status < 400) {
         const location = error.response.headers?.['location'];
         if (typeof location !== 'string' || location.trim() === '') {
-          throw new Error(`Invalid redirect location: (missing) from ${redactUrl(currentUrl)}`);
+          throw new Error(`Invalid redirect location: (missing) from ${urlForLog(currentUrl)}`);
         }
         let nextUrl: string;
         try {
-          nextUrl = isMagnetUri(location) ? location.trim() : new URL(location.trim(), currentUrl).toString();
+          // Magnets are checked strictly (no whitespace) at the top of the next hop
+          const trimmed = location.trim();
+          nextUrl = /^magnet:/i.test(trimmed) ? trimmed : new URL(trimmed, currentUrl).toString();
         } catch {
-          throw new Error(`Invalid redirect location: ${redactUrl(location)}`);
+          throw new Error(`Invalid redirect location: ${urlForLog(location)}`);
         }
-        logger.info(`Source redirect ${hop + 1} (HTTP ${status}) to ${redactUrl(nextUrl)}`);
+        logger.info(`Source redirect ${hop + 1} (HTTP ${status}) to ${urlForLog(nextUrl)}`);
         currentUrl = nextUrl;
         continue;
       }
       throw new DownloadSourceError(
         `Grab failed: source returned HTTP ${status}`,
         status,
-        redactUrl(currentUrl),
+        urlForLog(currentUrl),
         error
       );
     }

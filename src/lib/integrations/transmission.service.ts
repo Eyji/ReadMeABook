@@ -11,7 +11,7 @@ import { DOWNLOAD_CLIENT_TIMEOUT } from '../constants/download-timeouts';
 import * as parseTorrentModule from 'parse-torrent';
 import { RMABLogger } from '../utils/logger';
 import { fetchDownloadSource } from './download-source';
-import { redactUrl } from '../utils/prowlarr-url';
+import { urlForLog } from '../utils/prowlarr-url';
 import { PathMapper, PathMappingConfig } from '../utils/path-mapper';
 import {
   IDownloadClient,
@@ -271,7 +271,7 @@ export class TransmissionService implements IDownloadClient {
     category: string,
     options?: AddDownloadOptions
   ): Promise<string> {
-    logger.info(`Downloading .torrent file from: ${redactUrl(torrentUrl)}`);
+    logger.info(`Downloading .torrent file from: ${urlForLog(torrentUrl)}`);
 
     // Shared fetcher: follows every redirect hop, resolves a magnet at any hop,
     // and scopes the Prowlarr key to Prowlarr download hops.

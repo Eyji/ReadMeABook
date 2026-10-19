@@ -9,7 +9,7 @@ import { XMLParser } from 'fast-xml-parser';
 import { DOWNLOAD_CLIENT_TIMEOUT } from '../constants/download-timeouts';
 import { TorrentResult } from '../utils/ranking-algorithm';
 import { RMABLogger } from '../utils/logger';
-import { redactUrl } from '../utils/prowlarr-url';
+import { urlForLog } from '../utils/prowlarr-url';
 
 // Module-level logger
 const logger = RMABLogger.create('Prowlarr');
@@ -449,7 +449,7 @@ export class ProwlarrService {
       // Debug: Log first few results to see their protocols
       if (results.length > 0 && results.length <= 5) {
         results.forEach((r, i) => {
-          logger.info(` Result ${i + 1}: protocol="${r.protocol || 'undefined'}", url="${redactUrl(r.downloadUrl).substring(0, 80)}..."`);
+          logger.info(` Result ${i + 1}: protocol="${r.protocol || 'undefined'}", url="${urlForLog(r.downloadUrl)}"`);
         });
       } else if (results.length > 5) {
         logger.info(` First 3 results:`);

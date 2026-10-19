@@ -67,6 +67,8 @@ describe('download selection guard on routes', () => {
     ['another origin', EVIL],
     ['a non-download Prowlarr path', `${PROWLARR}/api/v1/indexer`],
     ['a look-alike origin', 'http://prowlarr:9697/1/download'],
+    ['a magnet with an embedded newline', 'magnet:?xt=urn:btih:abc\nhttp://evil.example/collect'],
+    ['a magnet with embedded whitespace', 'magnet:?xt=urn:btih:abc\thttp://evil.example/collect'],
   ])('rejects a download URL on %s', (_label, url) => {
     it('POST /api/audiobooks/request-with-torrent → 400', async () => {
       authRequest.json.mockResolvedValue({

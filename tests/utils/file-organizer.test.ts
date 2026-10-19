@@ -309,13 +309,13 @@ describe('file organizer', () => {
       title: 'Book',
       author: 'Author',
       asin: 'ASIN123',
-      coverArtUrl: 'https://images.example/cover.jpg',
+      coverArtUrl: 'https://m.media-amazon.com/images/I/cover.jpg',
     }, '{author}/{title} {asin}');
 
     expect(result.success).toBe(true);
     expect(result.coverArtFile).toBe(path.join(expectedDir, 'cover.jpg'));
     expect(axiosMock.get).toHaveBeenCalledWith(
-      'https://images.example/cover.jpg',
+      'https://m.media-amazon.com/images/I/cover.jpg',
       expect.objectContaining({ responseType: 'arraybuffer' })
     );
     // NOTE: Ebook downloads are now handled as first-class requests through the job queue
@@ -323,6 +323,43 @@ describe('file organizer', () => {
     expect(ebookMock.downloadEbook).not.toHaveBeenCalled();
     expect(copyFileMock.copyFile).toHaveBeenCalledWith(sourcePath, targetFile);
     expect(result.filesMovedCount).toBe(1);
+  });
+
+  it.each([
+    ['a loopback URL', 'http://127.0.0.1:6379/'],
+    ['a plain-http image host', 'http://m.media-amazon.com/images/I/cover.jpg'],
+    ['a look-alike host', 'https://media-amazon.com.evil.example/cover.jpg'],
+    ['a local file path', '/etc/passwd'],
+    ['a file URL', 'file:///etc/passwd'],
+    ['a cache path traversal', '/api/cache/thumbnails/../../../etc/passwd'],
+    ['a cache path with a sub-directory', '/api/cache/thumbnails/sub/cover.jpg'],
+  ])('never fetches or copies cover art from %s', async (_label, coverArtUrl) => {
+    configState.values.set('metadata_tagging_enabled', 'false');
+    const organizer = new FileOrganizer('/media', '/tmp');
+    (organizer as any).findAudiobookFiles = vi.fn().mockResolvedValue({
+      audioFiles: ['book.m4b'],
+      coverFile: undefined,
+      isFile: false,
+    });
+    const sourcePath = path.join('/downloads', 'book', 'book.m4b');
+    fsMock.access.mockImplementation(async (filePath: string) => {
+      if (path.normalize(filePath) === path.normalize(sourcePath)) return undefined;
+      throw new Error('missing');
+    });
+    fsMock.mkdir.mockResolvedValue(undefined);
+    copyFileMock.copyFile.mockResolvedValue(undefined);
+    fsMock.chmod.mockResolvedValue(undefined);
+    fsMock.writeFile.mockResolvedValue(undefined);
+    axiosMock.get.mockResolvedValue({ data: Buffer.from('cover') });
+
+    const result = await organizer.organize('/downloads/book', {
+      title: 'Book', author: 'Author', asin: 'ASIN123', coverArtUrl,
+    }, '{author}/{title} {asin}');
+
+    expect(axiosMock.get).not.toHaveBeenCalled();
+    expect(copyFileMock.copyFile).toHaveBeenCalledTimes(1); // the audio file only
+    expect(result.coverArtFile).toBeUndefined();
+    expect(result.errors.join(' ')).toContain('Failed to download cover art');
   });
 
   it('records an error when cover art download fails', async () => {
@@ -352,7 +389,7 @@ describe('file organizer', () => {
     const result = await organizer.organize('/downloads/book', {
       title: 'Book',
       author: 'Author',
-      coverArtUrl: 'https://images.example/cover.jpg',
+      coverArtUrl: 'https://m.media-amazon.com/images/I/cover.jpg',
     }, '{author}/{title}');
 
     expect(result.success).toBe(true);
@@ -909,7 +946,7 @@ describe('file organizer', () => {
     const result = await organizer.organize('/downloads/book', {
       title: 'Book',
       author: 'Author',
-      coverArtUrl: 'https://images.example/cover.jpg',
+      coverArtUrl: 'https://m.media-amazon.com/images/I/cover.jpg',
     }, '{author}/{title}');
 
     expect(result.success).toBe(true);
@@ -944,7 +981,7 @@ describe('file organizer', () => {
     const result = await organizer.organize('/downloads/book', {
       title: 'Book',
       author: 'Author',
-      coverArtUrl: 'https://images.example/cover.jpg',
+      coverArtUrl: 'https://m.media-amazon.com/images/I/cover.jpg',
     }, '{author}/{title}');
 
     // Audio copy failed → should be failure despite cover art being available

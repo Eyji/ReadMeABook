@@ -9,7 +9,7 @@ import https from 'https';
 import zlib from 'zlib';
 import { RMABLogger } from '@/lib/utils/logger';
 import { fetchDownloadSource } from '@/lib/integrations/download-source';
-import { redactUrl } from '@/lib/utils/prowlarr-url';
+import { urlForLog } from '@/lib/utils/prowlarr-url';
 import { PathMapper, PathMappingConfig } from '@/lib/utils/path-mapper';
 import {
   IDownloadClient,
@@ -212,7 +212,7 @@ export class NZBGetService implements IDownloadClient {
    * Downloads the NZB file from the source URL and uploads to NZBGet via append().
    */
   async addDownload(url: string, options?: AddDownloadOptions): Promise<string> {
-    logger.info(`Adding NZB from URL: ${redactUrl(url).substring(0, 150)}...`);
+    logger.info(`Adding NZB from URL: ${urlForLog(url)}`);
 
     const category = options?.category || this.defaultCategory;
 
@@ -261,7 +261,7 @@ export class NZBGetService implements IDownloadClient {
           throw new DownloadSourceError(
             `Grab failed: source returned HTTP ${status}`,
             status,
-            redactUrl(url),
+            urlForLog(url),
             error
           );
         }

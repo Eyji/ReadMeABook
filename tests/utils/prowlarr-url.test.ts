@@ -8,7 +8,7 @@ import {
   isMagnetUri,
   isProwlarrDownloadUrl,
   parseProwlarrBase,
-  redactUrl,
+  urlForLog,
   stripApiKey,
   withApiKeyParam,
 } from '@/lib/utils/prowlarr-url';
@@ -83,14 +83,30 @@ describe('withApiKeyParam', () => {
   });
 });
 
-describe('redactUrl / isMagnetUri', () => {
-  it('masks secret query values and credentials', () => {
-    expect(redactUrl('https://u:p@t.example/a?passkey=s1&x=1&apikey=s2&token=s3'))
-      .toBe('https://REDACTED@t.example/a?passkey=REDACTED&x=1&apikey=REDACTED&token=REDACTED');
+describe('urlForLog / isMagnetUri', () => {
+  it.each([
+    ['https://u:p@t.example:8443/a/PASSKEY123/dl?torrent_pass=s1&authkey=s2', 'https://t.example:8443'],
+    ['http://prowlarr:9696/1/download?apikey=s3&link=x', 'http://prowlarr:9696'],
+    ['magnet:?xt=urn:btih:abc&tr=https%3A%2F%2Ftracker.example%2Fs4%2Fannounce', 'magnet:'],
+    ['not a url', '(invalid URL)'],
+  ])('logs only scheme + host for %s', (input, output) => {
+    expect(urlForLog(input)).toBe(output);
   });
 
   it('detects magnets', () => {
     expect(isMagnetUri('magnet:?xt=urn:btih:abc')).toBe(true);
     expect(isMagnetUri('http://x/magnet:?')).toBe(false);
+  });
+
+  it.each([
+    ['embedded newline', 'magnet:?xt=urn:btih:abc\nhttp://evil.example/x'],
+    ['embedded CRLF', 'magnet:?xt=urn:btih:abc\r\nhttp://evil.example/x'],
+    ['embedded space', 'magnet:?xt=urn:btih:abc http://evil.example/x'],
+    ['embedded tab', 'magnet:?xt=urn:btih:abc\thttp://evil.example/x'],
+    ['trailing newline', 'magnet:?xt=urn:btih:abc\n'],
+    ['leading space', ' magnet:?xt=urn:btih:abc'],
+    ['empty query', 'magnet:?'],
+  ])('rejects a magnet with %s', (_label, value) => {
+    expect(isMagnetUri(value)).toBe(false);
   });
 });

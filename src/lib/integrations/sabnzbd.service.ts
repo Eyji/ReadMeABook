@@ -9,7 +9,7 @@ import https from 'https';
 import FormData from 'form-data';
 import { RMABLogger } from '@/lib/utils/logger';
 import { fetchDownloadSource, type SourceAuth } from '@/lib/integrations/download-source';
-import { redactUrl } from '@/lib/utils/prowlarr-url';
+import { urlForLog } from '@/lib/utils/prowlarr-url';
 import { PathMapper, PathMappingConfig } from '@/lib/utils/path-mapper';
 import {
   IDownloadClient,
@@ -479,7 +479,7 @@ export class SABnzbdService implements IDownloadClient {
    * @returns SABnzbd NZB ID (nzo_id)
    */
   async addNZB(url: string, options?: AddNZBOptions): Promise<string> {
-    logger.info(`Adding NZB from URL: ${redactUrl(url).substring(0, 150)}...`);
+    logger.info(`Adding NZB from URL: ${urlForLog(url)}`);
 
     const category = options?.category || this.defaultCategory;
 
@@ -523,7 +523,7 @@ export class SABnzbdService implements IDownloadClient {
           throw new DownloadSourceError(
             `Grab failed: source returned HTTP ${status}`,
             status,
-            redactUrl(url),
+            urlForLog(url),
             error
           );
         }

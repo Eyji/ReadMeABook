@@ -146,15 +146,16 @@ finalPath = config.customPath ? path.join(downloadDir, config.customPath) : down
 **File:** `src/lib/integrations/download-source.ts` (`fetchDownloadSource`), rules in `src/lib/utils/prowlarr-url.ts`, constants in `src/lib/constants/download-source.ts`
 - RMAB fetches every .torrent/.nzb itself (all 5 clients), then hands the file or magnet to the client
 - Redirects followed one hop at a time, max `MAX_SOURCE_REDIRECT_HOPS` (5); `Location` resolved against the current hop (relative OK)
-- `magnet:` accepted at any hop or as the response body (torrent clients only; usenet → error)
-- One deadline across all hops (caller timeout); file size cap `MAX_SOURCE_FILE_BYTES` (50 MB); non-http(s) hops rejected
+- `magnet:` accepted at any hop or as the response body (torrent clients only; usenet → error). Strict form everywhere (`isMagnetUri`: `^magnet:\?[^\s]+$`, no whitespace) because clients split URL lists on newlines; the processor skips releases with a malformed magnet
+- Hard deadline for the whole fetch (caller timeout; `AbortSignal.timeout`, since axios `timeout` is only an inactivity timer); file size cap `MAX_SOURCE_FILE_BYTES` (50 MB); non-http(s) hops rejected
+- `httpsAgent` (usenet clients' "disable SSL verify") applies only when the starting URL is https, and only to hops on that same origin
 - **Prowlarr key:** `AddDownloadOptions.sourceAuth = { prowlarrBaseUrl, apiKey }` (built in `download-torrent.processor.ts` from `getProwlarrConnection()`). Key sent (`X-Api-Key` + `apikey` query restored if missing) **only** when the hop is `<configured Prowlarr origin><base path>/{indexerId}/download`. Any other origin or Prowlarr path gets no key. Configured URL that is not plain http(s) → key never sent
-- Logs/errors: `redactUrl()` masks `apikey|api_key|passkey|token|auth|key` values and URL credentials; `DownloadSourceError.sourceUrl` is redacted
+- Logs/errors: `urlForLog()` keeps scheme + host only (`magnet:` for magnets); `DownloadSourceError.sourceUrl` uses the same form
 - HTTP error from source → `DownloadSourceError` (processor tries next ranked release)
 
 ### User-Picked Releases
 **File:** `src/lib/services/download-selection-guard.ts`
-- Torrent/NZB picks (`request-with-torrent`, `select-torrent`, `select-ebook` indexer source, admin `replace`, admin `approve` incl. stored picks): `downloadUrl` must be a `magnet:?` URI or a Prowlarr download URL (rule above) → else 400 `ValidationError`
+- Torrent/NZB picks (`request-with-torrent`, `select-torrent`, `select-ebook` indexer source, admin `replace`, admin `approve` incl. stored picks, admin `retry-download` of a stored link): `downloadUrl` must be a `magnet:?` URI or a Prowlarr download URL (rule above) → else 400 `ValidationError`
 - Magnets are accepted as-is, so a user can choose a magnet's tracker list (accepted)
 - Anna's Archive picks: only `md5` (32 hex) is trusted; links rebuilt with `getSlowDownloadLinks(md5, ebook_sidecar_base_url, flaresolverr)`; client `downloadUrl(s)` ignored
 - Search responses (`search-torrents`, `requests/[id]/interactive-search`, both `interactive-search-ebook`): `stripProwlarrKeyFromResults()` removes any `apikey=<configured key>` on any origin from every string field (fetcher restores it for Prowlarr hops)

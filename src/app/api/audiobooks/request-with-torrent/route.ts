@@ -14,6 +14,7 @@ import { getAudibleService } from '@/lib/integrations/audible.service';
 import { z } from 'zod';
 import { RMABLogger } from '@/lib/utils/logger';
 import { denyWithoutInteractiveSearchAccess } from '@/lib/middleware/interactive-search-access';
+import { sanitizeCoverArtUrl } from '@/lib/utils/cover-art-url';
 import { guardTorrentSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 
 const logger = RMABLogger.create('API.RequestWithTorrent');
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
             author: audiobook.author,
             narrator: audiobook.narrator,
             description: audiobook.description,
-            coverArtUrl: audiobook.coverArtUrl,
+            coverArtUrl: sanitizeCoverArtUrl(audiobook.coverArtUrl),
             year,
             series,
             seriesPart,

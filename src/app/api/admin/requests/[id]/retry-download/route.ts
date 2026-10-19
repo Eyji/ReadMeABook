@@ -16,6 +16,7 @@ import { getDownloadClientManager } from '@/lib/services/download-client-manager
 import { CLIENT_PROTOCOL_MAP, DownloadClientType } from '@/lib/interfaces/download-client.interface';
 import { TorrentResult } from '@/lib/utils/ranking-algorithm';
 import { RMABLogger } from '@/lib/utils/logger';
+import { guardTorrentSelection, rejectedSelectionResponse } from '@/lib/services/download-selection-guard';
 
 const logger = RMABLogger.create('API.Admin.Requests.RetryDownload');
 
@@ -100,6 +101,12 @@ export async function POST(
             },
             { status: 400 }
           );
+        }
+
+        // Stored URLs (including rows saved before validation existed) get the same check as new picks
+        const urlCheck = await guardTorrentSelection({ downloadUrl: downloadHistory.magnetLink });
+        if (!urlCheck.ok) {
+          return rejectedSelectionResponse(`The stored download link cannot be retried: ${urlCheck.error}`);
         }
 
         const jobQueue = getJobQueueService();

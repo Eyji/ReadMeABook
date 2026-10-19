@@ -12,8 +12,5 @@ export const MAX_SOURCE_FILE_BYTES = 50 * 1024 * 1024;
 /** Bodies at or below this size are checked for a bare magnet link */
 export const MAX_MAGNET_BODY_BYTES = 16 * 1024;
 
-/** Query parameter names whose values are masked in logs and errors */
-export const REDACTED_QUERY_PARAMS = ['apikey', 'api_key', 'passkey', 'token', 'auth', 'key'];
-
 /** Placeholder written in place of a redacted secret */
 export const REDACTED_VALUE = 'REDACTED';
