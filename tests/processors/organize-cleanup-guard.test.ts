@@ -332,11 +332,86 @@ describe('post-organize cleanup safety', () => {
     });
     const targetDir = path.join(media, 'Author', 'Book');
     const targetFile = mkfile(path.join(targetDir, 'Book.epub'), 'epub');
-    organizerMock.organizeEbook.mockResolvedValue({ success: true, targetPath: targetDir, format: 'epub', errors: [] });
+    const audio = mkfile(path.join(targetDir, 'Book.m4b'));
+    organizerMock.organizeEbook.mockResolvedValue({
+      success: true, targetPath: targetDir, format: 'epub', errors: [], sourceFile: targetFile,
+    });
     useHistory(historyRow({ id: 'dh-old' }));
 
     await runOrganize({ downloadPath: targetDir, cleanupSource: true });
 
     expect(fs.existsSync(targetFile)).toBe(true);
+    expect(fs.existsSync(audio)).toBe(true);
+  });
+
+  it('ebook source cleanup removes the file the organizer imported when a folder holds several epubs', async () => {
+    prismaMock.request.findUnique.mockResolvedValue({
+      id: 'req-1', userId: 'u1', type: 'ebook', user: { plexUsername: 'tester' },
+    });
+    const source = path.join(media, 'Unsorted', 'Ebooks');
+    const first = mkfile(path.join(source, 'a-other-book.epub'), 'epub-a');
+    const imported = mkfile(path.join(source, 'b-this-book.epub'), 'epub-b');
+    const targetDir = path.join(media, 'Author', 'Book');
+    organizerMock.organizeEbook.mockResolvedValue({
+      success: true, targetPath: targetDir, format: 'epub', errors: [], sourceFile: imported,
+    });
+    useHistory(null);
+
+    await runOrganize({ downloadPath: source, cleanupSource: true });
+
+    expect(fs.existsSync(imported)).toBe(false);
+    expect(fs.existsSync(first)).toBe(true);
+  });
+
+  it('removes a completed direct-download ebook file after organizing', async () => {
+    prismaMock.request.findUnique.mockResolvedValue({
+      id: 'req-1', userId: 'u1', type: 'ebook', user: { plexUsername: 'tester' },
+    });
+    const file = mkfile(path.join(downloads, 'Book.epub'), 'epub');
+    const targetDir = path.join(media, 'Author', 'Book');
+    const organized = mkfile(path.join(targetDir, 'Book.epub'), 'epub');
+    organizerMock.organizeEbook.mockResolvedValue({
+      success: true, targetPath: targetDir, format: 'epub', errors: [], sourceFile: file,
+    });
+    useHistory(historyRow({ downloadClient: 'direct', indexerId: null, downloadClientId: null, downloadPath: file }));
+
+    await runOrganize({ downloadPath: file, downloadHistoryId: 'dh-1' });
+
+    expect(organizerMock.organizeEbook.mock.calls[0][4]).toBe(false);
+    expect(fs.existsSync(file)).toBe(false);
+    expect(fs.existsSync(organized)).toBe(true);
+  });
+
+  it('keeps a single library ebook file when the newest row is a direct download but the job is an import', async () => {
+    prismaMock.request.findUnique.mockResolvedValue({
+      id: 'req-1', userId: 'u1', type: 'ebook', user: { plexUsername: 'tester' },
+    });
+    const libraryFile = mkfile(path.join(media, 'Other', 'Book', 'Book.epub'), 'epub');
+    const targetDir = path.join(media, 'Author', 'Book');
+    organizerMock.organizeEbook.mockResolvedValue({
+      success: true, targetPath: targetDir, format: 'epub', errors: [], sourceFile: libraryFile,
+    });
+    useHistory(historyRow({ id: 'dh-direct', downloadClient: 'direct', indexerId: null, downloadClientId: null, downloadPath: libraryFile }));
+
+    await runOrganize({ downloadPath: libraryFile });
+
+    // Organizer is told to keep its source; nothing else removes it
+    expect(organizerMock.organizeEbook.mock.calls[0][4]).toBe(true);
+    expect(fs.existsSync(libraryFile)).toBe(true);
+  });
+
+  it('keeps a direct-download file that the guard refuses', async () => {
+    prismaMock.request.findUnique.mockResolvedValue({
+      id: 'req-1', userId: 'u1', type: 'ebook', user: { plexUsername: 'tester' },
+    });
+    const libraryFile = mkfile(path.join(media, 'Other', 'Book', 'Book.epub'), 'epub');
+    organizerMock.organizeEbook.mockResolvedValue({
+      success: true, targetPath: path.join(media, 'Author', 'Book'), format: 'epub', errors: [], sourceFile: libraryFile,
+    });
+    useHistory(historyRow({ downloadClient: 'direct', indexerId: null, downloadClientId: null, downloadPath: libraryFile }));
+
+    await runOrganize({ downloadPath: libraryFile, downloadHistoryId: 'dh-1' });
+
+    expect(fs.existsSync(libraryFile)).toBe(true);
   });
 });

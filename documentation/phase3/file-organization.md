@@ -246,7 +246,8 @@ When user deletes and re-requests the same audiobook:
 
 - Comparison: realpath of candidate, target and roots (symlinks, junctions), plus dev+inode identity of the entry and its ancestors (case-insensitive mounts). Inode 0 never matches.
 - `cleanupSource` + `selectedFiles`: each file is checked; files inside the target are kept and listed in a warning (in-place renamed re-imports keep the old-named file).
-- Ebook `cleanupSource` removes only the imported ebook file, never its folder.
+- Ebook `cleanupSource` removes only the imported ebook file (`result.sourceFile`; the original EPUB when the Kindle fix ran), never its folder.
+- Direct HTTP download files (`downloadClient = direct`) are removed by `cleanupDirectDownloadSource` (same provenance gate + guard); the organizer itself never deletes its source.
 - `media_dir` resolution shared via `src/lib/utils/media-dir.ts` (`media_dir` → `MEDIA_DIR` → `/media/audiobooks`).
 
 **Same-file copies:** `copyFile` is a no-op when source and destination are the same file (`isSameFile`: realpath equal, or same dev + non-zero inode); the organizer skips audio and cover art already in place.
@@ -296,6 +297,7 @@ async function organize(
 **5. Hardcoded media path** - Now reads `media_dir` from database config instead of hardcoded `/media/audiobooks`
 **6. Invalid URL error for cached cover art** - Fixed by detecting local cached thumbnails (`/api/cache/thumbnails/*`) and copying from `/app/cache/thumbnails/` instead of attempting HTTP download
 **7. Manual import deleted library folders (#242)** - Download cleanup used the request's newest download row regardless of origin and `rm -rf`'d the import folder (even the media root); `cleanupSource` with source == target unlinked the library files; in-place re-import truncated `cover.jpg` to 0 bytes. Fixed by provenance gate + delete guard + same-file copy skip (see Post-Organize Cleanup Safety)
+   - Upgrade note: organize jobs queued before this change carry no `downloadHistoryId`, so they skip download cleanup once (files stay on disk, client history entry is not archived)
 
 ## Tech Stack
 

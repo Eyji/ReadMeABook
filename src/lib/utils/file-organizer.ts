@@ -919,15 +919,9 @@ export class FileOrganizer {
 
       await logger?.info(`Copied ebook: ${targetFilename}`);
 
-      // Clean up source file ONLY for direct HTTP downloads (not indexer downloads which need to seed)
-      if (!isIndexerDownload && isFile) {
-        try {
-          await fs.unlink(sourceFilePath);
-          await logger?.info(`Cleaned up source file: ${sourceFilename}`);
-        } catch {
-          // Ignore cleanup errors
-        }
-      } else if (isIndexerDownload) {
+      // The source is never deleted here. Direct HTTP download files are removed
+      // afterwards by the post-organize cleanup, behind the delete guard.
+      if (isIndexerDownload) {
         await logger?.info(`Keeping source file for seeding: ${sourceFilename}`);
       }
 

@@ -47,4 +47,20 @@ describe('FileOrganizer in-place re-import', () => {
     expect(fs.readFileSync(path.join(bookDir, 'Book.m4b')).equals(AUDIO)).toBe(true);
     expect(fs.readdirSync(bookDir).sort()).toEqual(['Book.m4b', 'cover.jpg']);
   });
+
+  it('never deletes the source ebook itself, even for a direct download', async () => {
+    const media = path.join(root, 'media');
+    const sourceDir = path.join(root, 'downloads');
+    fs.mkdirSync(sourceDir, { recursive: true });
+    const source = path.join(sourceDir, 'Book.epub');
+    fs.writeFileSync(source, 'epub-bytes');
+
+    const organizer = new FileOrganizer(media, path.join(root, 'tmp'));
+    const result = await organizer.organizeEbook(source, { title: 'Book', author: 'Author' }, '{author}/{title}', undefined, false);
+
+    expect(result.success).toBe(true);
+    expect(result.sourceFile).toBe(source);
+    expect(fs.readFileSync(source, 'utf8')).toBe('epub-bytes');
+    expect(fs.readdirSync(path.join(media, 'Author', 'Book'))).toEqual(['Book.epub']);
+  });
 });

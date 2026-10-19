@@ -67,6 +67,102 @@ export interface DownloadCleanupParams {
 }
 
 /**
+ * Load the DownloadHistory row behind this job, but only when the job is a
+ * download RMAB completed: the job carries the row id, the row belongs to the
+ * request, it is completed, and its stored (mapped) path equals the job path.
+ * Returns null otherwise (manual/bulk import, stale or mismatched rows).
+ */
+async function findCompletedDownloadForJob(
+  requestId: string,
+  downloadPath: string,
+  downloadHistoryId: string | undefined,
+  logger: RMABLogger
+) {
+  if (!downloadHistoryId) {
+    logger.info('Not a download RMAB completed (manual or bulk import), skipping download cleanup');
+    return null;
+  }
+
+  const downloadHistory = await prisma.downloadHistory.findUnique({
+    where: { id: downloadHistoryId },
+  });
+
+  logger.info(`Download history found: ${downloadHistory ? 'yes' : 'no'}`, {
+    hasDownloadClientId: !!downloadHistory?.downloadClientId,
+    hasIndexerId: !!downloadHistory?.indexerId,
+    downloadClient: downloadHistory?.downloadClient || 'none',
+  });
+
+  if (!downloadHistory || downloadHistory.requestId !== requestId) {
+    return null;
+  }
+
+  if (
+    downloadHistory.downloadStatus !== 'completed' ||
+    !downloadHistory.downloadPath ||
+    !downloadPath ||
+    normalizePath(path.resolve(downloadHistory.downloadPath)) !== normalizePath(path.resolve(downloadPath))
+  ) {
+    logger.info('Job path does not match the completed download path, skipping download cleanup', {
+      status: downloadHistory.downloadStatus || 'none',
+      storedPath: downloadHistory.downloadPath || 'none',
+      jobPath: downloadPath,
+    });
+    return null;
+  }
+
+  return downloadHistory;
+}
+
+/** Run the guard; log and return false on refusal, rethrow anything else. */
+async function guardAllows(candidate: string, ctx: DeleteGuardContext, logger: RMABLogger, label: string): Promise<boolean> {
+  try {
+    await assertSafeToDelete(candidate, ctx);
+    return true;
+  } catch (guardError) {
+    if (guardError instanceof UnsafeDeleteError) {
+      logger.warn(`${label} skipped: ${guardError.message}`);
+      return false;
+    }
+    throw guardError;
+  }
+}
+
+/**
+ * Remove a direct HTTP download file (e.g. an ebook fetched over HTTP) after it
+ * was copied into the library. Same provenance gate and guard as the indexer
+ * cleanup; only single files from the 'direct' client are removed.
+ */
+export async function cleanupDirectDownloadSource(params: DownloadCleanupParams): Promise<void> {
+  const { requestId, downloadPath, downloadHistoryId, targetPath, configService, logger } = params;
+  try {
+    const downloadHistory = await findCompletedDownloadForJob(requestId, downloadPath, downloadHistoryId, logger);
+    if (!downloadHistory || downloadHistory.downloadClient !== 'direct') {
+      return;
+    }
+
+    const fs = await import('fs/promises');
+    const stats = await fs.stat(downloadPath);
+    if (!stats.isFile()) {
+      return;
+    }
+
+    const roots = await collectGuardRoots(configService, logger);
+    if (!(await guardAllows(downloadPath, { ...roots, targetPath }, logger, 'Direct download cleanup'))) {
+      return;
+    }
+
+    await fs.unlink(downloadPath);
+    logger.info(`Cleaned up direct download file: ${path.basename(downloadPath)}`);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    logger.warn(`Failed to remove direct download file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+/**
  * Cleanup download files and archive from download client after successful organization.
  * Uses the IDownloadClient.postProcess() method for client-specific cleanup (e.g., SABnzbd archive).
  * Shared between audiobook and ebook organization flows.
@@ -80,36 +176,8 @@ export async function cleanupDownloadAfterOrganize(params: DownloadCleanupParams
   try {
     logger.info('Checking if cleanup is needed for this download');
 
-    if (!downloadHistoryId) {
-      logger.info('Not a download RMAB completed (manual or bulk import), skipping download cleanup');
-      return;
-    }
-
-    const downloadHistory = await prisma.downloadHistory.findUnique({
-      where: { id: downloadHistoryId },
-    });
-
-    logger.info(`Download history found: ${downloadHistory ? 'yes' : 'no'}`, {
-      hasDownloadClientId: !!downloadHistory?.downloadClientId,
-      hasIndexerId: !!downloadHistory?.indexerId,
-      downloadClient: downloadHistory?.downloadClient || 'none',
-    });
-
-    if (!downloadHistory || downloadHistory.requestId !== requestId) {
-      return;
-    }
-
-    if (
-      downloadHistory.downloadStatus !== 'completed' ||
-      !downloadHistory.downloadPath ||
-      !downloadPath ||
-      normalizePath(path.resolve(downloadHistory.downloadPath)) !== normalizePath(path.resolve(downloadPath))
-    ) {
-      logger.info('Job path does not match the completed download path, skipping download cleanup', {
-        status: downloadHistory.downloadStatus || 'none',
-        storedPath: downloadHistory.downloadPath || 'none',
-        jobPath: downloadPath,
-      });
+    const downloadHistory = await findCompletedDownloadForJob(requestId, downloadPath, downloadHistoryId, logger);
+    if (!downloadHistory) {
       return;
     }
 
@@ -145,14 +213,8 @@ export async function cleanupDownloadAfterOrganize(params: DownloadCleanupParams
     }
 
     const roots = await collectGuardRoots(configService, logger);
-    try {
-      await assertSafeToDelete(downloadPath, { ...roots, targetPath });
-    } catch (guardError) {
-      if (guardError instanceof UnsafeDeleteError) {
-        logger.warn(`Download cleanup skipped: ${guardError.message}`);
-        return;
-      }
-      throw guardError;
+    if (!(await guardAllows(downloadPath, { ...roots, targetPath }, logger, 'Download cleanup'))) {
+      return;
     }
 
     logger.info(`Cleaning up download ${downloadHistory.downloadClientId} (cleanup enabled for indexer ${indexer.id})`);

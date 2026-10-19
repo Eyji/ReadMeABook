@@ -15,7 +15,7 @@ import { CLIENT_PROTOCOL_MAP, DownloadClientType } from '../interfaces/download-
 import { PathMapper, PathMappingConfig } from '../utils/path-mapper';
 import { generateFilesHash } from '../utils/files-hash';
 import { fixEpubForKindle, cleanupFixedEpub } from '../utils/epub-fixer';
-import { cleanupDownloadAfterOrganize, cleanupSourceAfterOrganize } from './organize-cleanup';
+import { cleanupDirectDownloadSource, cleanupDownloadAfterOrganize, cleanupSourceAfterOrganize } from './organize-cleanup';
 import { getAudibleService } from '../integrations/audible.service';
 import { addAutoBlock } from '../services/blocklist.service';
 
@@ -711,11 +711,12 @@ async function processEbookOrganization(
 
   logger.info(`Final metadata for path organization: year=${year || 'null'}, narrator=${narrator || 'null'}, series=${series || 'null'}, seriesPart=${seriesPart || 'null'}`);
 
-  // Check if this is an indexer download (needs to keep source for seeding)
-  const downloadHistory = await prisma.downloadHistory.findFirst({
-    where: { requestId },
-    orderBy: { createdAt: 'desc' },
-  });
+  // Check if this is an indexer download (needs to keep source for seeding).
+  // Decided from the download that queued this job, never the request's newest
+  // row: a manual import has no download of its own.
+  const downloadHistory = downloadHistoryId
+    ? await prisma.downloadHistory.findUnique({ where: { id: downloadHistoryId } })
+    : null;
   const isIndexerDownload = downloadHistory?.downloadClient !== 'direct';
   logger.info(`Download source: ${downloadHistory?.downloadClient || 'unknown'} (indexer download: ${isIndexerDownload})`);
 
@@ -892,6 +893,19 @@ async function processEbookOrganization(
     logger.debug(`Ebook library scan disabled (scanEnabled=${scanEnabled})`);
   }
 
+  // Remove a direct HTTP download file now that it is in the library
+  if (!isIndexerDownload) {
+    await cleanupDirectDownloadSource({
+      requestId,
+      downloadPath,
+      downloadHistoryId,
+      targetPath: result.targetPath,
+      configService,
+      jobId,
+      logger,
+    });
+  }
+
   // Cleanup downloads if configured (uses IDownloadClient.postProcess for client-specific cleanup)
   await cleanupDownloadAfterOrganize({
     requestId,
@@ -907,7 +921,8 @@ async function processEbookOrganization(
   // file that was imported is removed, never the folder around it: an import
   // folder can also hold an audiobook or other library content.
   if (cleanupSource) {
-    const importedFile = epubFilePath || result.sourceFile;
+    // The organizer reads a temp copy when the Kindle fix ran; the original is epubFilePath
+    const importedFile = fixedEpubPath ? epubFilePath : result.sourceFile;
     if (!importedFile) {
       logger.warn('Imported ebook file unknown, skipping source cleanup');
     } else if (path.resolve(importedFile) === path.resolve(downloadPath)) {
