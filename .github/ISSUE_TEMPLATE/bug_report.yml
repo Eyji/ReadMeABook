@@ -24,7 +24,7 @@ body:
       options:
         - Unified Docker image
         - Multi-container Docker
-        - Bare-metal
+        - Other (describe below)
     validations:
       required: true
 
@@ -69,7 +69,7 @@ body:
     id: compose
     attributes:
       label: Docker Compose (or run command)
-      description: The relevant part of your compose file or run command. Remove passwords, API keys, tokens and any other secrets before pasting. Bare-metal installs can describe their setup instead.
+      description: The relevant part of your compose file or run command. Remove passwords, API keys and any other secrets before pasting. For other setups, describe how you run ReadMeABook instead.
       render: yaml
     validations:
       required: true

@@ -3,6 +3,3 @@ contact_links:
   - name: Support and setup questions
     url: https://discord.gg/kaw6jKbKts
     about: Ask setup, configuration and "how do I" questions on Discord.
-  - name: Report a security vulnerability
-    url: https://github.com/kikootwo/ReadMeABook/security/policy
-    about: Please report security problems privately, not in a public issue.
