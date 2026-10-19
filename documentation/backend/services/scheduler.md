@@ -34,6 +34,20 @@ Manages recurring/scheduled jobs providing automated tasks (Plex scans, Audible 
 - Automatic scheduling/unscheduling when jobs enabled/disabled
 - Schedule updates handled by unscheduling old job and scheduling new one
 
+## Startup Initialization
+
+**Files:** `src/instrumentation.ts`, `src/lib/startup/{startup-trigger,startup-secret,app-init}.ts`, `src/app/api/init/route.ts`, constants `src/lib/constants/startup.ts`
+- Next.js `register()` (every `next start` / standalone `server.js`: Docker and bare metal) skips the edge runtime and `NEXT_PHASE=phase-production-build`, then fires `triggerStartupInit()` without awaiting it (Next awaits `register()`)
+- Trigger POSTs `/api/init` with header `x-rmab-startup-token` = per-process secret (32 random bytes, hex; kept only in memory on `globalThis`, never logged/env/disk)
+- Targets, in order: `http://127.0.0.1:$PORT`, `http://[::1]:$PORT`, bound `HOSTNAME` only if it is an IP literal, `__NEXT_PRIVATE_ORIGIN` only if loopback or that IP. 404 → try next target; 503/500 → retry later
+- Retry: capped backoff 1s → 60s (`STARTUP_RETRY_*`), never gives up, warn per failure, error when capped and every 10th attempt; stops after one 200 (logs which target worked)
+- `POST /api/init`: wrong/missing secret → 404; GET → 405. Readiness: DB `SELECT 1` + Redis `PING` (`LOADING` = not ready) → 503. Then `runCredentialMigration()` + `scheduler.start()` once per process (single-flight; later calls → 200 `alreadyInitialized`). Failure → generic 500, details in logs
+- Init runs inside a route handler so processors share the settings caches that admin routes invalidate
+- Prisma, JobQueue and Scheduler singletons live on `globalThis` (`src/lib/utils/process-singleton.ts`) so a second module copy never starts a second set of processors
+- **Single process only:** PM2 `-i N` / Node cluster is unsupported (peers would 404 on init, and N processes would each run a scheduler)
+- `next dev --experimental-https` does not start the scheduler (trigger only speaks plain HTTP)
+- First boot on an install that never ran `/api/init` (bare metal): never-run jobs count as overdue (`isJobOverdue`), so enabled jobs run once right after startup
+
 ## Human-Friendly Scheduling UI
 
 **Three Modes:**
@@ -123,7 +137,7 @@ interface ScheduledJob {
 - `setMaxListeners(20)`: Set on both Redis client and Bull queue to accommodate 12 job processors (6 regular + 6 scheduled)
 
 **Flow:**
-1. App starts → `scheduler.start()` → schedules all enabled jobs
+1. App starts → instrumentation trigger → `POST /api/init` → `scheduler.start()` → schedules all enabled jobs
 2. Bull triggers job at cron time → processor calls `triggerJobNow()`
 3. `triggerJobNow()` executes job-specific logic (Plex scan, Audible refresh, etc.)
 4. Updates `lastRun` timestamp in database
