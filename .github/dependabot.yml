@@ -29,6 +29,13 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
+    ignore:
+      # The static-ffmpeg tag, its digest and FFMPEG_VERSION in dockerfile.unified
+      # must move together (the build's version guard fails otherwise), so bump it by hand.
+      - dependency-name: "mwader/static-ffmpeg"
+      # CI tests on Node 20; a new Node major needs CI and the image moved together.
+      - dependency-name: "node"
+        update-types: ["version-update:semver-major"]
     groups:
       docker-minor-patch:
         update-types:
